@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Editor Visual</title>
   
-  <!-- pdfmake (client-side) requires pdfmake + vfs_fontss -->
+  <!-- pdfmake (client-side) requires pdfmake + vfs_fonts + teste -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/pdfmake.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/vfs_fonts.js"></script>
   
@@ -1478,6 +1478,7 @@
             </div>
     
             <button class="btn primary" id="previewBtn">Pré-visualizar PDF</button>
+            <button class="btn primary" id="bubbleTestBtn">Teste Bubble</button>
             <button class="btn" id="clearBtn">Limpar</button>
           </div>
       </div>
@@ -1654,6 +1655,8 @@
     let pageSize = 'A4';
     let pageMargins = [40, 60, 40, 60];
     let zoom = 0.95;
+    // IMPORTANTE: use a origem exata do Bubble
+    const BUBBLE_ORIGIN = "https://mentions-20237.bubbleapps.io";
     
     // Headers & Footers - Agora como containers visuais no canvas
     let documentHeader = {
@@ -1876,6 +1879,7 @@
     const zoomRange = document.getElementById("zoomRange");
     const zoomLabel = document.getElementById("zoomLabel");
     const previewBtn = document.getElementById("previewBtn");
+    const bubbleTestBtn = document.getElementById("bubbleTestBtn");
     const clearBtn = document.getElementById("clearBtn");
     const canvas = document.getElementById("canvas");
     const canvasEmpty = document.getElementById("canvasEmpty");
@@ -7874,11 +7878,27 @@ function renderElementRecursive(el) {
     }
     window.closePreviewModal = closePreviewModal; // Tornar global para uso no onclick
 
+    function closeBubbleTestModal() {
+      const modal = document.getElementById('bubbleTestModal');
+      const iframe = document.getElementById('bubbleTestIframe');
+      
+      if (modal) {
+        modal.classList.remove('active');
+      }
+      
+      // Limpar o src do iframe
+      if (iframe) {
+        iframe.src = '';
+      }
+    }
+    window.closeBubbleTestModal = closeBubbleTestModal; // Tornar global para uso no onclick
+
     // Fechar modais com ESC
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeConfirmModal();
         closePreviewModal();
+        closeBubbleTestModal();
       }
     });
 
@@ -8987,6 +9007,35 @@ function renderElementRecursive(el) {
         }
       });
     });
+    
+    function getCodToSend() {
+        const text = codeEditor.textContent || '';
+        navigator.clipboard.writeText(text).then(() => {
+            return text;
+        });
+    }
+
+    function sendCod() {
+        const cod = getCodToSend();
+        frame.contentWindow.postMessage(
+        { type: "SET_COD", cod },
+        BUBBLE_ORIGIN
+        );
+    }
+
+    // Botão Teste Bubble
+    bubbleTestBtn.addEventListener('click', () => {
+      const bubbleModal = document.getElementById('bubbleTestModal');
+      const bubbleIframe = document.getElementById('bubbleTestIframe');
+      
+      if (bubbleIframe) {
+        bubbleIframe.src = BUBBLE_ORIGIN + '/version-test/preview_pdf';
+      }
+      
+      if (bubbleModal) {
+        bubbleModal.classList.add('active');
+      }
+    });
 
     clearBtn.addEventListener('click', () => {
       clearAll();
@@ -9123,6 +9172,26 @@ function renderElementRecursive(el) {
       <div class="preview-modal-body">
         <iframe
           id="previewIframe"
+          class="preview-modal-iframe"
+          frameborder="0"
+          style="overflow:hidden;overflow-x:hidden;overflow-y:hidden;height:100%;width:100%;position:absolute;top:0px;left:0px;right:0px;bottom:0px"
+          height="100%"
+          width="100%">
+        </iframe>
+      </div>
+    </div>
+  </div>
+
+  <div id="bubbleTestModal" class="custom-modal">
+    <div class="custom-modal-overlay" onclick="closeBubbleTestModal()"></div>
+    <div class="preview-modal-content">
+      <div class="preview-modal-header">
+        <h3>Teste Bubble</h3>
+        <button class="preview-modal-close" onclick="closeBubbleTestModal()">Fechar</button>
+      </div>
+      <div class="preview-modal-body">
+        <iframe
+          id="bubbleTestIframe"
           class="preview-modal-iframe"
           frameborder="0"
           style="overflow:hidden;overflow-x:hidden;overflow-y:hidden;height:100%;width:100%;position:absolute;top:0px;left:0px;right:0px;bottom:0px"
