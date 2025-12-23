@@ -9008,36 +9008,27 @@ function renderElementRecursive(el) {
     
     const BUBBLE_URL = "https://mentions-20237.bubbleapps.io/version-test/preview_pdf";
 
-function getCodToSend() {
-  return codeEditor.textContent || "";
-}
+    function getCodToSend() {
+        return (codeEditor.value ?? codeEditor.textContent ?? "").trim();
+    }
 
-bubbleTestBtn.addEventListener("click", () => {
-  const bubbleIframe = document.getElementById("bubbleTestIframe");
-  const bubbleModal  = document.getElementById("bubbleTestModal");
+    bubbleTestBtn.addEventListener("click", () => {
+        const bubbleIframe = document.getElementById("bubbleTestIframe");
+        const bubbleModal  = document.getElementById("bubbleTestModal");
 
-  // abre modal
-  bubbleModal.classList.add("active");
+        bubbleModal.classList.add("active");
+        bubbleIframe.src = BUBBLE_URL;
 
-  // seta a URL do Bubble
-  bubbleIframe.src = BUBBLE_URL;
+        bubbleIframe.onload = () => {
+            const cod = getCodToSend();
+            const origin = new URL(bubbleIframe.src).origin;
 
-  // envia SOMENTE quando terminar de carregar (agora vai bater a origin)
-  bubbleIframe.onload = () => {
-    const cod = getCodToSend();
-    const origin = new URL(bubbleIframe.src).origin;
+            console.log("[PARENT] iframe carregou:", bubbleIframe.src);
+            console.log("[PARENT] enviando SET_COD len=", cod.length, "para", origin);
 
-    console.log("[PARENT] iframe carregou:", bubbleIframe.src);
-    console.log("[PARENT] enviando SET_COD len=", cod.length, "para", origin);
-
-    bubbleIframe.contentWindow.postMessage(
-      { type: "SET_COD", cod },
-      origin
-    );
-  };
-});
-
-
+            bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
+        };
+    });
 
 
     clearBtn.addEventListener('click', () => {
