@@ -9009,18 +9009,12 @@ function renderElementRecursive(el) {
     });
     
     function getCodToSend() {
-        const text = codeEditor.textContent || '';
-        navigator.clipboard.writeText(text).then(() => {
-            return text;
-        });
-    }
+        return codeEditor.textContent || '';
+    }       
 
     function sendCod() {
         const cod = getCodToSend();
-        frame.contentWindow.postMessage(
-        { type: "SET_COD", cod },
-        BUBBLE_ORIGIN
-        );
+        frame.contentWindow.postMessage({ type: "SET_COD", cod }, BUBBLE_ORIGIN);
     }
 
     // Botão Teste Bubble
