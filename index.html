@@ -9014,8 +9014,14 @@ function renderElementRecursive(el) {
 
     function sendCod() {
         const cod = getCodToSend();
-        frame.contentWindow.postMessage({ type: "SET_COD", cod }, BUBBLE_ORIGIN);
+        iframe.contentWindow.postMessage({ type: "SET_COD", cod }, BUBBLE_ORIGIN);
     }
+
+        // Escuta respostas do Bubble
+        window.addEventListener("message", (event) => {
+        if (event.origin !== BUBBLE_ORIGIN) return;
+        console.log("[PARENT] recebeu do BUBBLE:", event.data);
+        });
 
     // Botão Teste Bubble
     bubbleTestBtn.addEventListener('click', () => {
