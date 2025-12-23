@@ -1655,8 +1655,6 @@
     let pageSize = 'A4';
     let pageMargins = [40, 60, 40, 60];
     let zoom = 0.95;
-    // IMPORTANTE: use a origem exata do Bubble
-    const BUBBLE_ORIGIN = "https://mentions-20237.bubbleapps.io";
     
     // Headers & Footers - Agora como containers visuais no canvas
     let documentHeader = {
@@ -9008,34 +9006,54 @@ function renderElementRecursive(el) {
       });
     });
     
-    function getCodToSend() {
-        return codeEditor.textContent || '';
-    }       
+    
+const BUBBLE_ORIGIN = "https://mentions-20237.bubbleapps.io"; // SEM barra no final
 
-    function sendCod() {
-        const cod = getCodToSend();
-        iframe.contentWindow.postMessage({ type: "SET_COD", cod }, BUBBLE_ORIGIN);
-    }
+function getCodToSend() {
+  return codeEditor.textContent || "";
+}
 
-        // Escuta respostas do Bubble
-        window.addEventListener("message", (event) => {
-        if (event.origin !== BUBBLE_ORIGIN) return;
-        console.log("[PARENT] recebeu do BUBBLE:", event.data);
-        });
+function sendCod(bubbleIframe) {
+  const cod = getCodToSend();
+  console.log("[PARENT] enviando SET_COD len=", cod.length);
 
-    // Botão Teste Bubble
-    bubbleTestBtn.addEventListener('click', () => {
-      const bubbleModal = document.getElementById('bubbleTestModal');
-      const bubbleIframe = document.getElementById('bubbleTestIframe');
-      
-      if (bubbleIframe) {
-        bubbleIframe.src = BUBBLE_ORIGIN + '/version-test/preview_pdf';
-      }
-      
-      if (bubbleModal) {
-        bubbleModal.classList.add('active');
-      }
-    });
+  bubbleIframe.contentWindow.postMessage(
+    { type: "SET_COD", cod },
+    BUBBLE_ORIGIN
+  );
+}
+
+// Escuta ACK do Bubble (debug)
+window.addEventListener("message", (event) => {
+  if (event.origin !== BUBBLE_ORIGIN) return;
+  console.log("[PARENT] recebeu do BUBBLE:", event.data);
+});
+
+// Clique do botão que abre modal + iframe
+bubbleTestBtn.addEventListener("click", () => {
+  const bubbleModal = document.getElementById("bubbleTestModal");
+  const bubbleIframe = document.getElementById("bubbleTestIframe");
+
+  // abre modal
+  bubbleModal.classList.add("active");
+
+  // seta src só se ainda não estiver setado (evita reload desnecessário)
+  const desiredSrc = BUBBLE_ORIGIN + "/version-test/preview_pdf";
+  if (bubbleIframe.src !== desiredSrc) bubbleIframe.src = desiredSrc;
+
+  // envia sempre depois que o iframe carregar
+  bubbleIframe.onload = () => {
+    sendCod(bubbleIframe);
+
+    // manda de novo depois de 300ms só pra garantir (Bubble às vezes demora pra “subir” o Toolbox)
+    setTimeout(() => sendCod(bubbleIframe), 300);
+  };
+
+  // se o iframe já estava carregado (abrindo modal de novo), envia na hora também
+  setTimeout(() => sendCod(bubbleIframe), 100);
+});
+
+
 
     clearBtn.addEventListener('click', () => {
       clearAll();
