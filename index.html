@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Editor Visual</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg version='1.1' id='Layer_1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' x='0px' y='0px' viewBox='0 0 309.529 309.529' style='enable-background:new 0 0 309.529 309.529;' xml:space='preserve'%3E%3Cg%3E%3Cpath style='fill:%23E2574C;' d='M179.728,251.279c0-39.586,32.096-71.682,71.682-71.682c6.698,0,13.173,0.995,19.329,2.716V86.711L183.69,0H19.46C8.79,0,0.13,8.65,0.13,19.329v270.609c0,10.679,8.659,19.329,19.329,19.329h189.929C191.441,296.239,179.728,275.161,179.728,251.279z'/%3E%3Cpath style='fill:%23B53629;' d='M270.46,86.981h-67.372c-10.67,0-19.329-8.659-19.329-19.329V0.193L270.46,86.981z'/%3E%3Cpath style='fill:%233DB39E;' d='M251.41,193.553c32.028,0,57.988,25.969,57.988,57.988c0,32.009-25.959,57.988-57.988,57.988c-32.009,0-57.988-25.978-57.988-57.988C193.422,219.522,219.401,193.553,251.41,193.553z'/%3E%3Cpath style='fill:%23FFFFFF;' d='M270.74,241.876h-9.665v-9.665c0-5.345-4.32-9.665-9.665-9.665c-5.345,0-9.665,4.32-9.665,9.665v9.665h-9.665c-5.345,0-9.665,4.32-9.665,9.665c0,5.354,4.32,9.665,9.665,9.665h9.665v9.665c0,5.354,4.32,9.665,9.665,9.665c5.344,0,9.665-4.31,9.665-9.665v-9.665h9.665c5.345,0,9.665-4.31,9.665-9.665C280.404,246.206,276.085,241.876,270.74,241.876z'/%3E%3Cpath style='fill:%23FFFFFF;' d='M198.235,146.544c3.238,0,4.823-2.822,4.823-5.557c0-2.832-1.653-5.567-4.823-5.567h-18.44c-3.605,0-5.615,2.986-5.615,6.282v45.317c0,4.04,2.3,6.282,5.412,6.282c3.093,0,5.403-2.242,5.403-6.282v-12.438h11.153c3.46,0,5.19-2.832,5.19-5.644c0-2.754-1.73-5.49-5.19-5.49h-11.153v-16.903C184.995,146.544,198.235,146.544,198.235,146.544z M135.908,135.42h-13.492c-3.663,0-6.263,2.513-6.263,6.243v45.395c0,4.629,3.74,6.079,6.417,6.079h14.159c16.758,0,27.824-11.027,27.824-28.047C164.545,147.095,154.126,135.42,135.908,135.42z M136.556,181.946h-8.225v-35.334h7.413c11.221,0,16.101,7.529,16.101,17.918C151.845,174.253,147.052,181.946,136.556,181.946z M87.131,135.42H73.765c-3.779,0-5.886,2.493-5.886,6.282v45.317c0,4.04,2.416,6.282,5.663,6.282s5.663-2.242,5.663-6.282v-13.231h8.379c10.341,0,18.875-7.326,18.875-19.107C106.46,143.152,98.226,135.42,87.131,135.42z M86.909,163.158h-7.703v-17.097h7.703c4.755,0,7.78,3.711,7.78,8.553C94.679,159.447,91.664,163.158,86.909,163.158z'/%3E%3C/g%3E%3C/svg%3E">
   
   <!-- pdfmake (client-side) requires pdfmake + vfs_fonts + teste -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/pdfmake.min.js"></script>
@@ -1442,7 +1443,17 @@
     <div class="header">
       <div class="header-top">
         <div class="header-left">
-          <div style="font-size: 1.5rem;">📄</div>
+          <div style="width: 40px; height: 40px; flex-shrink: 0;">
+            <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 309.529 309.529" style="enable-background:new 0 0 309.529 309.529;" xml:space="preserve" width="100%" height="100%">
+              <g>
+                <path style="fill:#E2574C;" d="M179.728,251.279c0-39.586,32.096-71.682,71.682-71.682c6.698,0,13.173,0.995,19.329,2.716V86.711L183.69,0H19.46C8.79,0,0.13,8.65,0.13,19.329v270.609c0,10.679,8.659,19.329,19.329,19.329h189.929C191.441,296.239,179.728,275.161,179.728,251.279z"/>
+                <path style="fill:#B53629;" d="M270.46,86.981h-67.372c-10.67,0-19.329-8.659-19.329-19.329V0.193L270.46,86.981z"/>
+                <path style="fill:#3DB39E;" d="M251.41,193.553c32.028,0,57.988,25.969,57.988,57.988c0,32.009-25.959,57.988-57.988,57.988c-32.009,0-57.988-25.978-57.988-57.988C193.422,219.522,219.401,193.553,251.41,193.553z"/>
+                <path style="fill:#FFFFFF;" d="M270.74,241.876h-9.665v-9.665c0-5.345-4.32-9.665-9.665-9.665c-5.345,0-9.665,4.32-9.665,9.665v9.665h-9.665c-5.345,0-9.665,4.32-9.665,9.665c0,5.354,4.32,9.665,9.665,9.665h9.665v9.665c0,5.354,4.32,9.665,9.665,9.665c5.344,0,9.665-4.31,9.665-9.665v-9.665h9.665c5.345,0,9.665-4.31,9.665-9.665C280.404,246.206,276.085,241.876,270.74,241.876z"/>
+                <path style="fill:#FFFFFF;" d="M198.235,146.544c3.238,0,4.823-2.822,4.823-5.557c0-2.832-1.653-5.567-4.823-5.567h-18.44c-3.605,0-5.615,2.986-5.615,6.282v45.317c0,4.04,2.3,6.282,5.412,6.282c3.093,0,5.403-2.242,5.403-6.282v-12.438h11.153c3.46,0,5.19-2.832,5.19-5.644c0-2.754-1.73-5.49-5.19-5.49h-11.153v-16.903C184.995,146.544,198.235,146.544,198.235,146.544z M135.908,135.42h-13.492c-3.663,0-6.263,2.513-6.263,6.243v45.395c0,4.629,3.74,6.079,6.417,6.079h14.159c16.758,0,27.824-11.027,27.824-28.047C164.545,147.095,154.126,135.42,135.908,135.42z M136.556,181.946h-8.225v-35.334h7.413c11.221,0,16.101,7.529,16.101,17.918C151.845,174.253,147.052,181.946,136.556,181.946z M87.131,135.42H73.765c-3.779,0-5.886,2.493-5.886,6.282v45.317c0,4.04,2.416,6.282,5.663,6.282s5.663-2.242,5.663-6.282v-13.231h8.379c10.341,0,18.875-7.326,18.875-19.107C106.46,143.152,98.226,135.42,87.131,135.42z M86.909,163.158h-7.703v-17.097h7.703c4.755,0,7.78,3.711,7.78,8.553C94.679,159.447,91.664,163.158,86.909,163.158z"/>
+              </g>
+            </svg>
+          </div>
           <div>
             <h1>Editor Visual</h1>
             <p>Crie PDFs de forma visual e intuitiva</p>
@@ -2234,7 +2245,9 @@
 
     function deleteSelected() {
       if (!selectedElementId) return;
-      resetCanvasSizeCache(); // Resetar cache quando conteúdo muda
+      // IMPORTANTE: Resetar cache e permitir ajuste de tamanho apenas quando realmente deletamos um elemento
+      resetCanvasSizeCache();
+      allowCanvasSizeAdjust = true; // Permitir ajuste ao deletar elemento
       const info = findNodeWithParent(selectedElementId);
       if (!info || !info.parent) {
         // Não deleta root do header/footer nem root principal
@@ -2258,6 +2271,7 @@
       }
 
       selectedElementId = parent.id;
+      allowCanvasSizeAdjust = true; // Permitir ajuste ao deletar elemento
       renderAll();
       saveState();
     }
@@ -2284,6 +2298,7 @@
         swap(info.parent.properties.body[ctx.row][ctx.col].children, ctx.index, ctx.index + dir);
       }
 
+      allowCanvasSizeAdjust = true; // Permitir ajuste ao mover elemento
       renderAll();
     }
 
@@ -2339,6 +2354,7 @@
       if (!getRootGroup()) {
         if (type !== 'group') return;
         resetCanvasSizeCache(); // Resetar cache quando conteúdo muda
+        allowCanvasSizeAdjust = true; // Permitir ajuste ao criar grupo inicial
         const g = defaultElement('group');
         elements = [g];
         selectedElementId = g.id;
@@ -2353,6 +2369,7 @@
 
     function insertIntoTarget(target, type) {
       resetCanvasSizeCache(); // Resetar cache quando conteúdo muda
+      allowCanvasSizeAdjust = true; // Permitir ajuste ao adicionar elemento
       const root = getRootGroup();
       const newEl = defaultElement(type);
 
@@ -3154,9 +3171,8 @@ function renderElementRecursive(el) {
         const headerContainer = document.createElement('div');
         headerContainer.className = 'header-container';
         headerContainer.setAttribute('data-header-container', 'true');
-        headerContainer.style.position = 'sticky';
-        headerContainer.style.top = '0';
-        headerContainer.style.zIndex = '100';
+        // Removido position: sticky para que role junto com o conteúdo
+        // Mantém apenas o estilo visual, sem fixação durante scroll
         headerContainer.style.background = '#f9fafb';
         headerContainer.style.borderBottom = '2px solid #2563eb';
         headerContainer.style.padding = '1rem';
@@ -3214,9 +3230,8 @@ function renderElementRecursive(el) {
         const footerContainer = document.createElement('div');
         footerContainer.className = 'footer-container';
         footerContainer.setAttribute('data-footer-container', 'true');
-        footerContainer.style.position = 'sticky';
-        footerContainer.style.bottom = '0';
-        footerContainer.style.zIndex = '100';
+        // Removido position: sticky para que role junto com o conteúdo
+        // Mantém apenas o estilo visual, sem fixação durante scroll
         footerContainer.style.background = '#f9fafb';
         footerContainer.style.borderTop = '2px solid #2563eb';
         footerContainer.style.padding = '1rem';
@@ -3258,9 +3273,11 @@ function renderElementRecursive(el) {
       applyZoom();
       
       // Ajustar altura e largura do canvas dinamicamente baseado no conteúdo
-      // IMPORTANTE: Só ajustar se solicitado (não ajustar quando apenas selecionamos um elemento)
-      if (shouldAdjustSize) {
+      // IMPORTANTE: Só ajustar se solicitado E se permitido (apenas quando elementos são adicionados/removidos)
+      if (shouldAdjustSize && allowCanvasSizeAdjust) {
         adjustCanvasSize();
+        // Desativar após ajustar para evitar ajustes em cliques subsequentes
+        allowCanvasSizeAdjust = false;
       }
     }
     
@@ -3279,14 +3296,35 @@ function renderElementRecursive(el) {
     let lastCanvasHeight = 0; // Armazenar última altura aplicada para evitar recálculos desnecessários
     
     // Função auxiliar para resetar cache de tamanho do canvas quando conteúdo muda
+    // IMPORTANTE: Só resetar quando há mudanças estruturais reais (adicionar/remover elementos)
+    // NÃO resetar durante edições de propriedades (texto, cores, etc.)
     function resetCanvasSizeCache() {
       lastCanvasWidth = 0;
       lastCanvasHeight = 0;
     }
     
+    // Flag para indicar se estamos em modo de edição (não ajustar tamanho)
+    let isEditingMode = false;
+    
+    // Flag para permitir ajuste de tamanho apenas quando elementos são adicionados/removidos
+    let allowCanvasSizeAdjust = false;
+    
     function adjustCanvasSize() {
       // Evitar chamadas recursivas que podem causar crescimento infinito
       if (isAdjustingCanvasSize) return;
+      
+      // IMPORTANTE: Não ajustar tamanho durante edições de propriedades
+      // Isso evita crescimento infinito ao editar texto, cores, posições, etc.
+      if (isEditingMode) {
+        return;
+      }
+      
+      // IMPORTANTE: Só ajustar tamanho quando explicitamente permitido (adicionar/remover elementos)
+      // Isso evita crescimento infinito ao clicar em elementos ou no canvas
+      if (!allowCanvasSizeAdjust) {
+        return;
+      }
+      
       isAdjustingCanvasSize = true;
       
       // Aguardar múltiplos frames para garantir que o DOM foi completamente atualizado
@@ -5364,6 +5402,14 @@ function renderElementRecursive(el) {
       return `
         <div class="inspector-field">
           <label>Código SVG</label>
+          <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">
+            <div style="font-size: 0.875rem; color: #0369a1; margin-bottom: 0.25rem; font-weight: 500;">💡 Dica:</div>
+            <div style="font-size: 0.8125rem; color: #075985;">
+              Crie ou edite SVGs facilmente em 
+              <a href="https://www.svgviewer.dev/" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 500;">svgviewer.dev</a>
+              e depois cole o código aqui.
+            </div>
+          </div>
           <textarea id="insp-svgCode" placeholder="Cole ou digite o código SVG aqui" style="min-height: 120px; font-family: monospace; font-size: 0.875rem;">${escapeHtml(p.svg || '')}</textarea>
           <div class="smallNote">Cole o código SVG completo (incluindo a tag &lt;svg&gt;)</div>
             </div>
@@ -5453,20 +5499,26 @@ function renderElementRecursive(el) {
             delete p.margin;
           }
           updateWithoutLosingFocus(() => {
-            if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
           }, 300);
         });
       });
       
       // Função helper para atualizar sem perder foco
       function updateWithoutLosingFocus(updateFn, delay = 300) {
+        // Ativar modo de edição para evitar ajuste de tamanho durante edições
+        isEditingMode = true;
+        
         // Salvar estado do elemento focado
         const activeElement = document.activeElement;
         if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
           focusedElementId = activeElement.id;
+          // IMPORTANTE: Para inputs number, salvar o valor como string para preservar digitação parcial
           focusedElementValue = activeElement.value;
-          focusedElementSelectionStart = activeElement.selectionStart;
-          focusedElementSelectionEnd = activeElement.selectionEnd;
+          // Para inputs number, selectionStart/End podem ser null, usar 0 como fallback
+          focusedElementSelectionStart = activeElement.selectionStart !== null ? activeElement.selectionStart : activeElement.value.length;
+          focusedElementSelectionEnd = activeElement.selectionEnd !== null ? activeElement.selectionEnd : activeElement.value.length;
         }
         
         // Limpar timeout anterior
@@ -5478,25 +5530,59 @@ function renderElementRecursive(el) {
         renderTimeout = setTimeout(() => {
           updateFn();
           
+          // Desativar modo de edição após um pequeno delay para permitir que o DOM se estabilize
+          setTimeout(() => {
+            isEditingMode = false;
+          }, 200);
+          
           // Restaurar foco após renderização
           setTimeout(() => {
             if (focusedElementId) {
               const element = document.getElementById(focusedElementId);
               if (element) {
-                element.focus();
+                // IMPORTANTE: Para inputs number, restaurar o valor ANTES de focar
                 if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+                  // Restaurar o valor exato que estava sendo digitado (pode incluir digitação parcial)
                   element.value = focusedElementValue;
-                  if (element.setSelectionRange && focusedElementSelectionStart !== undefined) {
-                    const len = element.value.length;
-                    element.setSelectionRange(
-                      Math.min(focusedElementSelectionStart, len),
-                      Math.min(focusedElementSelectionEnd !== undefined ? focusedElementSelectionEnd : focusedElementSelectionStart, len)
-                    );
-                  }
+                  
+                  // Focar o elemento
+                  element.focus();
+                  
+                  // Restaurar posição do cursor após um pequeno delay para garantir que o valor foi aplicado
+                  setTimeout(() => {
+                    if (element.setSelectionRange && focusedElementSelectionStart !== undefined && focusedElementSelectionStart !== null) {
+                      const len = element.value.length;
+                      const start = Math.min(Math.max(0, focusedElementSelectionStart), len);
+                      const end = Math.min(Math.max(0, focusedElementSelectionEnd !== undefined && focusedElementSelectionEnd !== null ? focusedElementSelectionEnd : focusedElementSelectionStart), len);
+                      
+                      // IMPORTANTE: Para inputs number, tentar restaurar a posição do cursor
+                      try {
+                        element.setSelectionRange(start, end);
+                      } catch (e) {
+                        // Alguns navegadores podem não suportar setSelectionRange em inputs number
+                        // Nesse caso, tentar posicionar o cursor no final
+                        try {
+                          element.setSelectionRange(len, len);
+                        } catch (e2) {
+                          // Se ainda falhar, apenas manter o foco
+                        }
+                      }
+                    } else {
+                      // Se não houver seleção salva, posicionar no final
+                      try {
+                        const len = element.value.length;
+                        element.setSelectionRange(len, len);
+                      } catch (e) {
+                        // Ignorar erro
+                      }
+                    }
+                  }, 5);
+                } else {
+                  element.focus();
                 }
               }
             }
-          }, 10);
+          }, 50); // Aumentar delay para garantir que o DOM foi completamente atualizado
         }, delay);
       }
       
@@ -5505,11 +5591,18 @@ function renderElementRecursive(el) {
         const widthInput = document.getElementById('insp-width');
         if (widthInput && typeof redistributeGroupWidths === 'function') {
           widthInput.addEventListener('input', () => {
-            const newWidth = parseFloat(widthInput.value) || 0;
-            redistributeGroupWidths(parentGroupInfo.group, element.id, newWidth);
+            // IMPORTANTE: Não processar o valor imediatamente para inputs number
+            // Deixar o valor como string durante a digitação para preservar posição do cursor
+            const rawValue = widthInput.value;
+            // Apenas atualizar se o valor for válido (não vazio e numérico)
+            if (rawValue !== '' && !isNaN(rawValue)) {
+              const newWidth = parseFloat(rawValue) || 0;
+              redistributeGroupWidths(parentGroupInfo.group, element.id, newWidth);
+            }
             updateWithoutLosingFocus(() => {
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
               if (typeof renderAll === 'function') {
-                renderAll();
+                renderAll(false);
               } else if (typeof render === 'function') {
                 render();
               }
@@ -5528,7 +5621,13 @@ function renderElementRecursive(el) {
         const heightInput = document.getElementById('insp-height');
         if (heightInput) {
           heightInput.addEventListener('input', () => {
-            element.h = parseInt(heightInput.value) || 100;
+            // IMPORTANTE: Não processar o valor imediatamente para inputs number
+            // Deixar o valor como string durante a digitação para preservar posição do cursor
+            const rawValue = heightInput.value;
+            // Apenas atualizar se o valor for válido (não vazio e numérico)
+            if (rawValue !== '' && !isNaN(rawValue)) {
+              element.h = parseInt(rawValue) || 100;
+            }
             if (typeof updateGroupDimensions === 'function') {
               updateGroupDimensions(parentGroupInfo.group);
             }
@@ -5570,7 +5669,8 @@ function renderElementRecursive(el) {
               p.text = textInput.value; 
               updateParentGroupsDimensions(element.id);
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -5578,23 +5678,34 @@ function renderElementRecursive(el) {
             textLinkInput.addEventListener('input', () => { 
               p.link = textLinkInput.value.trim() || null;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (fontSizeInput) {
             fontSizeInput.addEventListener('input', () => { 
-              p.fontSize = parseInt(fontSizeInput.value); 
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              // Deixar o valor como string durante a digitação para preservar posição do cursor
+              const rawValue = fontSizeInput.value;
+              // Apenas atualizar a propriedade se o valor for válido (não vazio e numérico)
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.fontSize = parseInt(rawValue);
+              }
               updateParentGroupsDimensions(element.id);
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (fontSelect) {
             fontSelect.addEventListener('change', () => { 
+              isEditingMode = true;
               p.font = fontSelect.value || null;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              setTimeout(() => { isEditingMode = false; }, 200);
             });
           }
           if (fontFeaturesInput) {
@@ -5602,25 +5713,35 @@ function renderElementRecursive(el) {
               const val = fontFeaturesInput.value.trim();
               p.fontFeatures = val ? val.split(',').map(f => f.trim()).filter(Boolean) : undefined;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (alignmentSelect) alignmentSelect.addEventListener('change', () => { 
+            isEditingMode = true;
             p.alignment = alignmentSelect.value; 
-            if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            setTimeout(() => { isEditingMode = false; }, 200);
           });
           if (decorationSelect) {
             decorationSelect.addEventListener('change', () => { 
+              isEditingMode = true;
               p.decoration = decorationSelect.value || null;
               if (decorationOptions) decorationOptions.style.display = p.decoration ? '' : 'none';
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              setTimeout(() => { isEditingMode = false; }, 200);
             });
           }
           if (decorationStyleSelect) {
             decorationStyleSelect.addEventListener('change', () => {
+              isEditingMode = true;
               p.decorationStyle = decorationStyleSelect.value || null;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              setTimeout(() => { isEditingMode = false; }, 200);
             });
           }
           if (decorationColorInput && decorationColorTextInput) {
@@ -5628,7 +5749,8 @@ function renderElementRecursive(el) {
               decorationColorTextInput.value = decorationColorInput.value;
               p.decorationColor = decorationColorInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             decorationColorTextInput.addEventListener('input', () => {
@@ -5639,7 +5761,8 @@ function renderElementRecursive(el) {
                 p.decorationColor = decorationColorTextInput.value;
               }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -5648,7 +5771,8 @@ function renderElementRecursive(el) {
               colorTextInput.value = colorInput.value;
               p.color = colorInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             colorTextInput.addEventListener('input', () => {
@@ -5656,7 +5780,8 @@ function renderElementRecursive(el) {
                 colorInput.value = colorTextInput.value;
                 p.color = colorTextInput.value;
                 updateWithoutLosingFocus(() => {
-                  if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
                 }, 300);
               }
             });
@@ -5666,7 +5791,8 @@ function renderElementRecursive(el) {
               backgroundTextInput.value = backgroundInput.value;
               p.background = backgroundInput.value || null;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             backgroundTextInput.addEventListener('input', () => {
@@ -5677,33 +5803,48 @@ function renderElementRecursive(el) {
                 p.background = backgroundTextInput.value;
               }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (boldCheck) boldCheck.addEventListener('change', () => { 
             p.bold = boldCheck.checked; 
-            if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
           });
           if (italicsCheck) italicsCheck.addEventListener('change', () => { 
             p.italics = italicsCheck.checked; 
-            if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
           });
           if (lineHeightInput) {
             lineHeightInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
               const val = lineHeightInput.value.trim();
-              p.lineHeight = val ? parseFloat(val) : undefined;
+              if (val !== '' && !isNaN(val)) {
+                p.lineHeight = parseFloat(val);
+              } else if (val === '') {
+                p.lineHeight = undefined;
+              }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (characterSpacingInput) {
             characterSpacingInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
               const val = characterSpacingInput.value.trim();
-              p.characterSpacing = val ? parseFloat(val) : undefined;
+              if (val !== '' && !isNaN(val)) {
+                p.characterSpacing = parseFloat(val);
+              } else if (val === '') {
+                p.characterSpacing = undefined;
+              }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -5734,7 +5875,8 @@ function renderElementRecursive(el) {
             headerTextInput.addEventListener('input', () => { 
               p.text = headerTextInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -5742,22 +5884,29 @@ function renderElementRecursive(el) {
             headerLinkInput.addEventListener('input', () => { 
               p.link = headerLinkInput.value.trim() || null;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (headerFontSizeInput) {
             headerFontSizeInput.addEventListener('input', () => { 
-              p.fontSize = parseInt(headerFontSizeInput.value);
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = headerFontSizeInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.fontSize = parseInt(rawValue);
+              }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (headerFontSelect) {
             headerFontSelect.addEventListener('change', () => { 
               p.font = headerFontSelect.value || null;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
             });
           }
           if (headerFontFeaturesInput) {
@@ -5765,25 +5914,29 @@ function renderElementRecursive(el) {
               const val = headerFontFeaturesInput.value.trim();
               p.fontFeatures = val ? val.split(',').map(f => f.trim()).filter(Boolean) : undefined;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (headerAlignmentSelect) headerAlignmentSelect.addEventListener('change', () => { 
             p.alignment = headerAlignmentSelect.value; 
-            if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
           });
           if (headerDecorationSelect) {
             headerDecorationSelect.addEventListener('change', () => { 
               p.decoration = headerDecorationSelect.value || null;
               if (headerDecorationOptions) headerDecorationOptions.style.display = p.decoration ? '' : 'none';
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
             });
           }
           if (headerDecorationStyleSelect) {
             headerDecorationStyleSelect.addEventListener('change', () => {
               p.decorationStyle = headerDecorationStyleSelect.value || null;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           if (headerDecorationColorInput && headerDecorationColorTextInput) {
@@ -5791,7 +5944,8 @@ function renderElementRecursive(el) {
               headerDecorationColorTextInput.value = headerDecorationColorInput.value;
               p.decorationColor = headerDecorationColorInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             headerDecorationColorTextInput.addEventListener('input', () => {
@@ -5802,7 +5956,8 @@ function renderElementRecursive(el) {
                 p.decorationColor = headerDecorationColorTextInput.value;
               }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -5811,7 +5966,8 @@ function renderElementRecursive(el) {
               headerColorTextInput.value = headerColorInput.value;
               p.color = headerColorInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             headerColorTextInput.addEventListener('input', () => {
@@ -5819,7 +5975,8 @@ function renderElementRecursive(el) {
                 headerColorInput.value = headerColorTextInput.value;
                 p.color = headerColorTextInput.value;
                 updateWithoutLosingFocus(() => {
-                  if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
                 }, 300);
               }
             });
@@ -5829,7 +5986,8 @@ function renderElementRecursive(el) {
               headerBackgroundTextInput.value = headerBackgroundInput.value;
               p.background = headerBackgroundInput.value || null;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             headerBackgroundTextInput.addEventListener('input', () => {
@@ -5840,24 +5998,28 @@ function renderElementRecursive(el) {
                 p.background = headerBackgroundTextInput.value;
               }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (headerBoldCheck) headerBoldCheck.addEventListener('change', () => { 
             p.bold = headerBoldCheck.checked; 
-            if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
           });
           if (headerItalicsCheck) headerItalicsCheck.addEventListener('change', () => { 
             p.italics = headerItalicsCheck.checked; 
-            if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
           });
           if (headerLineHeightInput) {
             headerLineHeightInput.addEventListener('input', () => {
               const val = headerLineHeightInput.value.trim();
               p.lineHeight = val ? parseFloat(val) : undefined;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -5866,7 +6028,8 @@ function renderElementRecursive(el) {
               const val = headerCharacterSpacingInput.value.trim();
               p.characterSpacing = val ? parseFloat(val) : undefined;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -5902,7 +6065,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -5912,7 +6076,9 @@ function renderElementRecursive(el) {
               const colIndex = parseInt(input.dataset.colIndex || 0);
               const typeSelect = document.querySelector(`.col-width-type[data-col-index="${colIndex}"]`);
               const widthType = typeSelect ? typeSelect.value : 'auto';
-              const value = parseFloat(input.value) || 0;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = input.value;
+              const value = (rawValue !== '' && !isNaN(rawValue)) ? parseFloat(rawValue) : 0;
               
               if (!p.columns || !p.columns[colIndex]) return;
               
@@ -5923,7 +6089,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -5957,7 +6124,9 @@ function renderElementRecursive(el) {
           
           if (colCountInput) {
             colCountInput.addEventListener('input', () => {
-              const count = parseInt(colCountInput.value) || 2;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = colCountInput.value;
+              const count = (rawValue !== '' && !isNaN(rawValue)) ? parseInt(rawValue) : 2;
               const current = p.columns || [];
               while (current.length < count) {
                 current.push({ text: `Coluna ${current.length + 1}`, width: '*', children: [] });
@@ -5980,9 +6149,14 @@ function renderElementRecursive(el) {
           
           if (colGapInput) {
             colGapInput.addEventListener('input', () => { 
-              p.gap = parseInt(colGapInput.value) || 10;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = colGapInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.gap = parseInt(rawValue) || 10;
+              }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -5991,7 +6165,8 @@ function renderElementRecursive(el) {
             colValignSelect.addEventListener('change', () => {
               p.valign = colValignSelect.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6009,7 +6184,8 @@ function renderElementRecursive(el) {
                 };
               });
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6029,28 +6205,36 @@ function renderElementRecursive(el) {
               p.ordered = listKindSelect.value === 'ol';
               p.listType = listKindSelect.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (listStartInput) {
             listStartInput.addEventListener('input', () => {
-              p.start = parseInt(listStartInput.value) || 1;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = listStartInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.start = parseInt(rawValue) || 1;
+              }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (listTypeSelect) {
             listTypeSelect.addEventListener('change', () => {
               p.type = listTypeSelect.value;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           if (listReversedCheck) {
             listReversedCheck.addEventListener('change', () => {
               p.reversed = listReversedCheck.checked;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           if (listItemsInput) {
@@ -6059,7 +6243,8 @@ function renderElementRecursive(el) {
               const lines = listItemsInput.value.split('\n').filter(Boolean);
               p.items = lines.map(line => ({ kind: 'text', text: line }));
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6132,7 +6317,8 @@ function renderElementRecursive(el) {
                 customLayoutOptions.style.display = (tableLayoutSelect.value === 'custom') ? 'block' : 'none';
               }
               
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               setTimeout(() => {
                 if (typeof renderInspector === 'function') renderInspector();
               }, 0);
@@ -6153,17 +6339,49 @@ function renderElementRecursive(el) {
           
           const updateCustomLayout = () => {
             if (!p.customLayout) p.customLayout = {};
-            if (hLineWidthInput) p.customLayout.hLineWidth = parseFloat(hLineWidthInput.value) || 1;
+            // IMPORTANTE: Não processar valores imediatamente para inputs number
+            if (hLineWidthInput) {
+              const rawValue = hLineWidthInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.hLineWidth = parseFloat(rawValue) || 1;
+              }
+            }
             if (hLineColorTextInput && hLineColorTextInput.value) p.customLayout.hLineColor = hLineColorTextInput.value;
-            if (vLineWidthInput) p.customLayout.vLineWidth = parseFloat(vLineWidthInput.value) || 1;
+            if (vLineWidthInput) {
+              const rawValue = vLineWidthInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.vLineWidth = parseFloat(rawValue) || 1;
+              }
+            }
             if (vLineColorTextInput && vLineColorTextInput.value) p.customLayout.vLineColor = vLineColorTextInput.value;
-            if (paddingLeftInput) p.customLayout.paddingLeft = parseInt(paddingLeftInput.value) || 5;
-            if (paddingRightInput) p.customLayout.paddingRight = parseInt(paddingRightInput.value) || 5;
-            if (paddingTopInput) p.customLayout.paddingTop = parseInt(paddingTopInput.value) || 5;
-            if (paddingBottomInput) p.customLayout.paddingBottom = parseInt(paddingBottomInput.value) || 5;
+            if (paddingLeftInput) {
+              const rawValue = paddingLeftInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.paddingLeft = parseInt(rawValue) || 5;
+              }
+            }
+            if (paddingRightInput) {
+              const rawValue = paddingRightInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.paddingRight = parseInt(rawValue) || 5;
+              }
+            }
+            if (paddingTopInput) {
+              const rawValue = paddingTopInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.paddingTop = parseInt(rawValue) || 5;
+              }
+            }
+            if (paddingBottomInput) {
+              const rawValue = paddingBottomInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.paddingBottom = parseInt(rawValue) || 5;
+              }
+            }
             
             updateWithoutLosingFocus(() => {
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             }, 300);
           };
           
@@ -6199,7 +6417,8 @@ function renderElementRecursive(el) {
           if (zebraEnabledCheck) {
             zebraEnabledCheck.addEventListener('change', () => {
               p.zebraEnabled = zebraEnabledCheck.checked;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               setTimeout(() => {
                 if (typeof renderInspector === 'function') renderInspector();
               }, 0);
@@ -6211,7 +6430,8 @@ function renderElementRecursive(el) {
               if (zebraColorTextInput) zebraColorTextInput.value = zebraColorInput.value;
               p.zebraColor = zebraColorInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6221,7 +6441,8 @@ function renderElementRecursive(el) {
               if (zebraColorInput && zebraColorTextInput.value) zebraColorInput.value = zebraColorTextInput.value;
               p.zebraColor = zebraColorTextInput.value || '#CCCCCC';
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6230,7 +6451,8 @@ function renderElementRecursive(el) {
             zebraWithLinesCheck.addEventListener('change', () => {
               p.zebraWithLines = zebraWithLinesCheck.checked;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6241,15 +6463,21 @@ function renderElementRecursive(el) {
           if (tableDontBreakRowsCheck) {
             tableDontBreakRowsCheck.addEventListener('change', () => {
               p.dontBreakRows = tableDontBreakRowsCheck.checked;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           
           if (tableKeepWithHeaderRowsInput) {
             tableKeepWithHeaderRowsInput.addEventListener('input', () => {
-              p.keepWithHeaderRows = parseInt(tableKeepWithHeaderRowsInput.value) || 0;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = tableKeepWithHeaderRowsInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.keepWithHeaderRows = parseInt(rawValue) || 0;
+              }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6266,7 +6494,8 @@ function renderElementRecursive(el) {
               p.body[row][col].fillColor = input.value || undefined;
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6282,7 +6511,8 @@ function renderElementRecursive(el) {
               p.body[row][col].fillColor = input.value || undefined;
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6298,7 +6528,8 @@ function renderElementRecursive(el) {
               p.body[row][col].color = input.value || undefined;
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6314,7 +6545,8 @@ function renderElementRecursive(el) {
               p.body[row][col].color = input.value || undefined;
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6325,11 +6557,16 @@ function renderElementRecursive(el) {
               const col = parseInt(input.dataset.col || 0);
               
               if (!p.body[row] || !p.body[row][col]) return;
-              const opacity = parseFloat(input.value);
-              p.body[row][col].fillOpacity = isNaN(opacity) ? 1 : opacity;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = input.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                const opacity = parseFloat(rawValue);
+                p.body[row][col].fillOpacity = isNaN(opacity) ? 1 : opacity;
+              }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6341,11 +6578,16 @@ function renderElementRecursive(el) {
               const col = parseInt(input.dataset.col || 0);
               
               if (!p.body[row] || !p.body[row][col]) return;
-              const rowSpan = parseInt(input.value) || 1;
-              p.body[row][col].rowSpan = rowSpan > 1 ? rowSpan : undefined;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = input.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                const rowSpan = parseInt(rawValue) || 1;
+                p.body[row][col].rowSpan = rowSpan > 1 ? rowSpan : undefined;
+              }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6356,11 +6598,16 @@ function renderElementRecursive(el) {
               const col = parseInt(input.dataset.col || 0);
               
               if (!p.body[row] || !p.body[row][col]) return;
-              const colSpan = parseInt(input.value) || 1;
-              p.body[row][col].colSpan = colSpan > 1 ? colSpan : undefined;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = input.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                const colSpan = parseInt(rawValue) || 1;
+                p.body[row][col].colSpan = colSpan > 1 ? colSpan : undefined;
+              }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6386,7 +6633,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6412,7 +6660,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6443,7 +6692,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6454,7 +6704,8 @@ function renderElementRecursive(el) {
               p.heights = value;
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6473,7 +6724,8 @@ function renderElementRecursive(el) {
               p.heights[row] = value;
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6493,7 +6745,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6508,7 +6761,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6519,7 +6773,8 @@ function renderElementRecursive(el) {
               p.customLayout.defaultBorder = defaultBorderCheck.checked;
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6552,7 +6807,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6577,7 +6833,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           });
@@ -6672,7 +6929,8 @@ function renderElementRecursive(el) {
                 if (typeof renderInspector === 'function') renderInspector();
               }, 0);
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6700,7 +6958,8 @@ function renderElementRecursive(el) {
               }
               
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6711,7 +6970,8 @@ function renderElementRecursive(el) {
               const val = imageWidthInput.value.trim();
               p.width = val ? parseInt(val) : undefined;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6720,7 +6980,8 @@ function renderElementRecursive(el) {
               const val = imageHeightInput.value.trim();
               p.height = val ? parseInt(val) : undefined;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6731,7 +6992,8 @@ function renderElementRecursive(el) {
               if (!Array.isArray(p.fit)) p.fit = [100, 100];
               p.fit[0] = parseInt(imageFitWidthInput.value) || 100;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6740,7 +7002,8 @@ function renderElementRecursive(el) {
               if (!Array.isArray(p.fit)) p.fit = [100, 100];
               p.fit[1] = parseInt(imageFitHeightInput.value) || 100;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6751,7 +7014,8 @@ function renderElementRecursive(el) {
               if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
               p.cover.width = parseInt(imageCoverWidthInput.value) || 300;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6760,7 +7024,8 @@ function renderElementRecursive(el) {
               if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
               p.cover.height = parseInt(imageCoverHeightInput.value) || 150;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6768,14 +7033,16 @@ function renderElementRecursive(el) {
             imageCoverAlignSelect.addEventListener('change', () => {
               if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
               p.cover.align = imageCoverAlignSelect.value;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           if (imageCoverValignSelect) {
             imageCoverValignSelect.addEventListener('change', () => {
               if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
               p.cover.valign = imageCoverValignSelect.value;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           
@@ -6783,7 +7050,8 @@ function renderElementRecursive(el) {
             imageBorderRadiusInput.addEventListener('input', () => { 
               p.borderRadius = parseInt(imageBorderRadiusInput.value) || 0;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6796,7 +7064,8 @@ function renderElementRecursive(el) {
                 p.opacity = Math.max(0, Math.min(1, p.opacity)); // Clamp entre 0 e 1
               }
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6804,7 +7073,8 @@ function renderElementRecursive(el) {
           if (imageAlignmentSelect) {
             imageAlignmentSelect.addEventListener('change', () => { 
               p.alignment = imageAlignmentSelect.value; 
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
             });
           }
           
@@ -6827,7 +7097,8 @@ function renderElementRecursive(el) {
                 if (typeof renderInspector === 'function') renderInspector();
               }, 0);
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6838,7 +7109,8 @@ function renderElementRecursive(el) {
               if (!p.absolutePosition) p.absolutePosition = { x: 0, y: 0 };
               p.absolutePosition.x = parseInt(imageAbsoluteXInput.value) || 0;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6847,7 +7119,8 @@ function renderElementRecursive(el) {
               if (!p.absolutePosition) p.absolutePosition = { x: 0, y: 0 };
               p.absolutePosition.y = parseInt(imageAbsoluteYInput.value) || 0;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6858,7 +7131,8 @@ function renderElementRecursive(el) {
               if (!p.relativePosition) p.relativePosition = { x: 0, y: 0 };
               p.relativePosition.x = parseInt(imageRelativeXInput.value) || 0;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6867,7 +7141,8 @@ function renderElementRecursive(el) {
               if (!p.relativePosition) p.relativePosition = { x: 0, y: 0 };
               p.relativePosition.y = parseInt(imageRelativeYInput.value) || 0;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6890,7 +7165,8 @@ function renderElementRecursive(el) {
               p.size = top;
             }
             updateWithoutLosingFocus(() => {
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             }, 300);
           };
           
@@ -6924,14 +7200,16 @@ function renderElementRecursive(el) {
           }
           if (groupAlignmentSelect) groupAlignmentSelect.addEventListener('change', () => { 
             p.alignment = groupAlignmentSelect.value; 
-            if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render(); 
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render(); 
           });
           if (groupGapInput) {
             groupGapInput.addEventListener('input', () => { 
               p.gap = parseInt(groupGapInput.value) || 10; 
               if (typeof updateGroupDimensions === 'function') updateGroupDimensions(element);
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6953,7 +7231,8 @@ function renderElementRecursive(el) {
             qrTextInput.addEventListener('input', () => {
               p.text = qrTextInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -6961,14 +7240,16 @@ function renderElementRecursive(el) {
             qrFitInput.addEventListener('input', () => {
               p.fit = parseInt(qrFitInput.value) || 100;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           if (qrEccLevelSelect) {
             qrEccLevelSelect.addEventListener('change', () => {
               p.eccLevel = qrEccLevelSelect.value;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           if (qrForegroundInput && qrForegroundTextInput) {
@@ -6976,7 +7257,8 @@ function renderElementRecursive(el) {
               qrForegroundTextInput.value = qrForegroundInput.value;
               p.foreground = qrForegroundInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             qrForegroundTextInput.addEventListener('input', () => {
@@ -6984,7 +7266,8 @@ function renderElementRecursive(el) {
                 qrForegroundInput.value = qrForegroundTextInput.value;
                 p.foreground = qrForegroundTextInput.value;
                 updateWithoutLosingFocus(() => {
-                  if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
                 }, 300);
               }
             });
@@ -6994,7 +7277,8 @@ function renderElementRecursive(el) {
               qrBackgroundTextInput.value = qrBackgroundInput.value;
               p.background = qrBackgroundInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             qrBackgroundTextInput.addEventListener('input', () => {
@@ -7002,7 +7286,8 @@ function renderElementRecursive(el) {
                 qrBackgroundInput.value = qrBackgroundTextInput.value;
                 p.background = qrBackgroundTextInput.value;
                 updateWithoutLosingFocus(() => {
-                  if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
                 }, 300);
               }
             });
@@ -7010,7 +7295,8 @@ function renderElementRecursive(el) {
           if (qrAlignmentSelect) {
             qrAlignmentSelect.addEventListener('change', () => {
               p.alignment = qrAlignmentSelect.value;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           break;
@@ -7027,7 +7313,8 @@ function renderElementRecursive(el) {
             svgCodeInput.addEventListener('input', () => {
               p.svg = svgCodeInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -7035,7 +7322,8 @@ function renderElementRecursive(el) {
             svgWidthInput.addEventListener('input', () => {
               p.width = parseInt(svgWidthInput.value) || 100;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -7043,7 +7331,8 @@ function renderElementRecursive(el) {
             svgHeightInput.addEventListener('input', () => {
               p.height = parseInt(svgHeightInput.value) || 100;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
@@ -7052,7 +7341,8 @@ function renderElementRecursive(el) {
               svgColorTextInput.value = svgColorInput.value;
               p.color = svgColorInput.value;
               updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
             svgColorTextInput.addEventListener('input', () => {
@@ -7060,7 +7350,8 @@ function renderElementRecursive(el) {
                 svgColorInput.value = svgColorTextInput.value;
                 p.color = svgColorTextInput.value;
                 updateWithoutLosingFocus(() => {
-                  if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
                 }, 300);
               }
             });
@@ -7068,7 +7359,8 @@ function renderElementRecursive(el) {
           if (svgAlignmentSelect) {
             svgAlignmentSelect.addEventListener('change', () => {
               p.alignment = svgAlignmentSelect.value;
-              if (typeof renderAll === 'function') renderAll(); else if (typeof render === 'function') render();
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             });
           }
           break;
@@ -8919,12 +9211,14 @@ function renderElementRecursive(el) {
     // -----------------------
     // UI bindings
     // -----------------------
-    function renderAll() {
+    function renderAll(shouldAdjustSize = true) {
       // mantém selected id válido
       if (selectedElementId && !findNodeById(selectedElementId)) {
         selectedElementId = getRootGroup() ? getRootGroup().id : null;
       }
-      renderCanvas();
+      // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+      // Isso evita crescimento infinito ao editar elementos
+      renderCanvas(shouldAdjustSize);
       renderInspector();
       updateCode();
       // Salvar estado automaticamente após renderizar
@@ -9049,8 +9343,20 @@ function renderElementRecursive(el) {
           return;
         }
         
-        selectedElementId = newSelectedId;
-        renderAll();
+        // IMPORTANTE: Usar selectElement() que não recria o DOM, apenas atualiza seleção visual
+        // Isso evita crescimento infinito ao clicar no canvas
+        if (newSelectedId) {
+          selectElement(newSelectedId);
+        } else {
+          // Desselecionar tudo sem recriar DOM
+          const prevSelected = selectedElementId ? document.querySelector(`[data-id="${selectedElementId}"]`) : null;
+          if (prevSelected) {
+            prevSelected.classList.remove('selected');
+          }
+          selectedElementId = null;
+          renderInspector();
+          updateCode();
+        }
       }
     });
 
