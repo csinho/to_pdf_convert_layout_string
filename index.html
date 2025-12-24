@@ -136,6 +136,7 @@
       flex-wrap: wrap;
       justify-content: flex-end;
       padding-top: 0.5rem;
+      height: 80px;
     }
 
     .chip {
@@ -329,11 +330,18 @@
 
     .canvas-tools {
       display: flex;
-      gap: 10px;
+      justify-content: space-between;
       align-items: center;
+      gap: 10px;
       padding: 10px 12px;
       border-bottom: 1px solid #e5e7eb;
       background: white;
+    }
+    
+    .canvas-tools-right {
+      display: flex;
+      gap: 10px;
+      align-items: center;
     }
 
     .zoom {
@@ -356,6 +364,34 @@
     .zoom input[type="range"] {
       width: 120px;
       cursor: pointer;
+    }
+    
+    .zoom-btn {
+      width: 24px;
+      height: 24px;
+      border: 1px solid #d1d5db;
+      border-radius: 100px;
+      background: white;
+      color: #374151;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: 1;
+      transition: all 0.2s;
+    }
+    
+    .zoom-btn:hover {
+      background: #62ba4574;
+      border-color: #9ca3af;
+    }
+    
+    .zoom-btn:active {
+      background: #62ba45;
+      transform: scale(0.95);
     }
 
     .zoom span:last-child {
@@ -1495,9 +1531,7 @@
     
             <button class="btn primary" id="previewBtn">Pré-visualizar PDF</button>
             <button class="btn primary" id="bubbleTestBtn">Teste Bubble</button>
-            <button class="btn" id="saveTemplateBtn" title="Salvar template atual">💾 Salvar Template</button>
             <button class="btn" id="loadTemplateBtn" title="Carregar template salvo">📂 Carregar Template</button>
-            <button class="btn" id="clearBtn">Limpar</button>
           </div>
       </div>
     </div>
@@ -1578,8 +1612,14 @@
         <div class="canvas-tools">
           <div class="zoom">
             <span>Zoom</span>
+            <button class="zoom-btn" id="zoomDecrease" title="Diminuir zoom">−</button>
             <input id="zoomRange" type="range" min="55" max="140" value="100" />
+            <button class="zoom-btn" id="zoomIncrease" title="Aumentar zoom">+</button>
             <span id="zoomLabel">100%</span>
+          </div>
+          <div class="canvas-tools-right">
+            <button class="btn" id="saveTemplateBtn" title="Salvar template atual" style="display: none;">💾 Salvar Template</button>
+            <button class="btn" id="clearBtn" style="display: none;">Limpar</button>
           </div>
         </div>
         <div class="canvas-wrapper">
@@ -1901,6 +1941,7 @@
     const previewBtn = document.getElementById("previewBtn");
     const bubbleTestBtn = document.getElementById("bubbleTestBtn");
     const clearBtn = document.getElementById("clearBtn");
+    const saveTemplateBtn = document.getElementById("saveTemplateBtn");
     const canvas = document.getElementById("canvas");
     const canvasEmpty = document.getElementById("canvasEmpty");
     const elementsList = document.getElementById("elementsList");
@@ -2351,6 +2392,8 @@
         allowCanvasSizeAdjust = true;
         renderAll(true);
         allowCanvasSizeAdjust = false;
+        // Atualizar visibilidade do botão "Salvar Template"
+        updateSaveTemplateButtonVisibility();
       }, 100);
       saveState();
     }
@@ -2690,8 +2733,16 @@
     
     function applyZoom() {
       const z = zoom;
-      elementsList.style.transformOrigin = 'top center';
-      elementsList.style.transform = `scale(${z})`;
+      const canvas = document.getElementById('canvas');
+      if (canvas) {
+        canvas.style.transformOrigin = 'top center';
+        canvas.style.transform = `scale(${z})`;
+      }
+      // Remover transform do elementsList para evitar duplicação
+      if (elementsList) {
+        elementsList.style.transform = '';
+        elementsList.style.transformOrigin = '';
+      }
     }
 
     function elementLabel(el) {
@@ -10279,6 +10330,19 @@ function renderElementRecursive(el) {
     // -----------------------
     // UI bindings
     // -----------------------
+    // Função para atualizar visibilidade dos botões "Salvar Template" e "Limpar"
+    function updateSaveTemplateButtonVisibility() {
+      const rootGroup = getRootGroup();
+      const hasElements = rootGroup && rootGroup.properties && rootGroup.properties.children && rootGroup.properties.children.length > 0;
+      
+      if (saveTemplateBtn) {
+        saveTemplateBtn.style.display = hasElements ? 'block' : 'none';
+      }
+      if (clearBtn) {
+        clearBtn.style.display = hasElements ? 'block' : 'none';
+      }
+    }
+    
     function renderAll(shouldAdjustSize = true) {
       // mantém selected id válido
       if (selectedElementId && !findNodeById(selectedElementId)) {
@@ -10289,6 +10353,8 @@ function renderElementRecursive(el) {
       renderCanvas(shouldAdjustSize);
       renderInspector();
       updateCode();
+      // Atualizar visibilidade do botão "Salvar Template"
+      updateSaveTemplateButtonVisibility();
       // Salvar estado automaticamente após renderizar
       saveState();
     }
@@ -10347,6 +10413,32 @@ function renderElementRecursive(el) {
       zoom = val / 100;
       applyZoom();
     });
+    
+    // Botões de zoom (+ e -)
+    const zoomDecrease = document.getElementById('zoomDecrease');
+    const zoomIncrease = document.getElementById('zoomIncrease');
+    
+    function updateZoom(value) {
+      const clampedValue = Math.max(55, Math.min(140, value));
+      zoomRange.value = clampedValue;
+      zoomLabel.textContent = clampedValue + '%';
+      zoom = clampedValue / 100;
+      applyZoom();
+    }
+    
+    if (zoomDecrease) {
+      zoomDecrease.addEventListener('click', () => {
+        const currentVal = Number(zoomRange.value || 100);
+        updateZoom(currentVal - 5); // Diminuir em 5%
+      });
+    }
+    
+    if (zoomIncrease) {
+      zoomIncrease.addEventListener('click', () => {
+        const currentVal = Number(zoomRange.value || 100);
+        updateZoom(currentVal + 5); // Aumentar em 5%
+      });
+    }
 
     previewBtn.addEventListener('click', () => {
       const dd = buildDocDefinition();
@@ -10658,6 +10750,10 @@ function renderElementRecursive(el) {
             if (typeof showAlertModal === 'function') {
               showAlertModal('Sucesso', `Template "${template.name}" carregado com sucesso!`);
             }
+            // Atualizar visibilidade do botão "Salvar Template"
+            if (typeof updateSaveTemplateButtonVisibility === 'function') {
+              updateSaveTemplateButtonVisibility();
+            }
           }, 100);
         } catch (e) {
           console.error('Erro ao carregar template:', e);
@@ -10712,7 +10808,6 @@ function renderElementRecursive(el) {
     }
     window.closeLoadTemplateModal = closeLoadTemplateModal;
     
-    const saveTemplateBtn = document.getElementById('saveTemplateBtn');
     const loadTemplateBtn = document.getElementById('loadTemplateBtn');
     if (saveTemplateBtn) {
       saveTemplateBtn.addEventListener('click', saveTemplate);
@@ -10801,6 +10896,9 @@ function renderElementRecursive(el) {
 
       // Renderizar tudo (vai gerar novo código se não houver código salvo)
       renderAll();
+      
+      // Atualizar visibilidade do botão "Salvar Template" na inicialização
+      updateSaveTemplateButtonVisibility();
       
       // Aplicar zoom após renderizar
     applyZoom();
