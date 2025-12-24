@@ -9,6 +9,8 @@
   <!-- pdfmake (client-side) requires pdfmake + vfs_fonts + teste -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/pdfmake.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/vfs_fonts.js"></script>
+  <!-- JsBarcode for barcode generation -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   
   <style>
     * {
@@ -286,6 +288,9 @@
     .icon-list { background: #06b6d4; }
     .icon-margin { background: #6b7280; }
     .icon-pagebreak { background: #ef4444; }
+    .icon-qr { background: #ff2f2f; }
+    .icon-svg { background: #fc2fff; }
+    .icon-barcode { background: #cbff2f; }
     .icon-group { background: #8b5cf6; }
 
     .info-box {
@@ -1550,6 +1555,10 @@
             <div class="element-icon icon-svg">🎨</div>
             <span>SVG</span>
           </div>
+          <div class="element-btn" draggable="true" ondragstart="startDrag('barcode', event)">
+            <div class="element-icon icon-barcode">📊</div>
+            <span>Barcode</span>
+          </div>
         </div>
 
         <div class="info-box">
@@ -2023,27 +2032,70 @@
       }
 
       if (type === 'table') {
-        const rows = 2, cols = 2; // 1 linha de header + 1 linha de dados
+        // Template oficial: 4 colunas, 1 headerRows, 1 linha de dados
+        const cols = 4;
+        const headerRows = 1;
+        
+        // Criar body com 2 linhas: header + dados
+        const body = [
+          // Linha 0 (header): 4 células com text: 'Coluna X', bold: true, alignment: 'center', fontSize: 10
+          Array.from({ length: cols }).map((_, colIdx) => ({
+            children: [{
+              id: uid(),
+              type: 'text',
+              properties: {
+                text: `Coluna ${colIdx + 1}`,
+                fontSize: 10,
+                bold: true,
+                alignment: 'center'
+              },
+              _ui: {}
+            }],
+            fontSize: 10,
+            alignment: 'center',
+            bold: true
+          })),
+          // Linha 1 (dados): 4 células com text: 'texto X', alignment: 'center', verticalAlignment: 'middle', fontSize: 9
+          Array.from({ length: cols }).map((_, colIdx) => ({
+            children: [{
+              id: uid(),
+              type: 'text',
+              properties: {
+                text: `texto ${colIdx + 1}`,
+                fontSize: 9,
+                bold: false,
+                alignment: 'center'
+              },
+              _ui: {}
+            }],
+            fontSize: 9,
+            alignment: 'center',
+            verticalAlignment: 'middle',
+            bold: false
+          }))
+        ];
+        
         return {
           ...base,
           properties: {
-            widths: Array.from({ length: cols }).map(() => '*'),
-            body: Array.from({ length: rows }).map((_, rowIdx) =>
-              Array.from({ length: cols }).map(() => ({ children: [] }))
-            ),
-            layout: 'custom', // Layout customizado por padrão para ter controle total
+            headerRows: headerRows,
+            widths: [40, '*', 40, '*'], // Template oficial: [40, '*', 40, '*']
+            body: body,
+            layout: 'custom',
             customLayout: {
-              // Linhas horizontais habilitadas por padrão
-              hLineWidth: 1,
-              hLineColor: '#000000',
-              // Linhas verticais habilitadas por padrão
-              vLineWidth: 1,
-              vLineColor: '#000000',
-              // Padding padrão
-              paddingLeft: 5,
-              paddingRight: 5,
-              paddingTop: 5,
-              paddingBottom: 5
+              // Template oficial: hLineWidth/vLineWidth: 0.6
+              hLineWidth: 0.6,
+              vLineWidth: 0.6,
+              // Template oficial: hLineColor/vLineColor: '#000'
+              hLineColor: '#000',
+              vLineColor: '#000',
+              // Template oficial: paddingLeft/Right = 4, paddingTop/Bottom = 3
+              paddingLeft: 4,
+              paddingRight: 4,
+              paddingTop: 3,
+              paddingBottom: 3,
+              // Template oficial: fillColor(rowIndex) com cinza #EDEDED somente no header (rowIndex === 0)
+              fillColor: true // Será tratado como função na geração
             },
             margin: [0, 0, 0, 10]
           }
@@ -2082,6 +2134,24 @@
             height: 100,
             color: '#000000',
             alignment: 'center',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'barcode') {
+        return {
+          ...base,
+          properties: {
+            barcodeValue: 'ABC123456789',
+            format: 'CODE128',
+            lineWidth: 1.5,
+            barHeight: 30,
+            displayValue: true,
+            fontSize: 10,
+            fit: [201, 42],
+            alignment: 'center',
+            verticalAlignment: 'middle',
             margin: [0, 0, 0, 10]
           }
         };
@@ -2444,6 +2514,50 @@
         if (!tableNode || tableNode.type !== 'table') return;
         const r = clamp(Number(target.row || 0), 0, (tableNode.properties.body || []).length - 1);
         const c = clamp(Number(target.col || 0), 0, (tableNode.properties.body[r] || []).length - 1);
+        
+        // Verificar se é header ou body (baseado em headerRows)
+        const headerRows = tableNode.properties.headerRows || 1;
+        const isHeaderRow = r < headerRows;
+        
+        // Se o elemento inserido é texto, aplicar propriedades específicas da tabela
+        if (newEl.type === 'text') {
+          if (isHeaderRow) {
+            // Header: fontSize: 10, bold: true, alignment: 'center'
+            newEl.properties.fontSize = 10;
+            newEl.properties.bold = true;
+            newEl.properties.alignment = 'center';
+            // Aplicar também na célula
+            if (!tableNode.properties.body[r][c].fontSize) {
+              tableNode.properties.body[r][c].fontSize = 10;
+            }
+            if (tableNode.properties.body[r][c].bold === undefined) {
+              tableNode.properties.body[r][c].bold = true;
+            }
+            if (!tableNode.properties.body[r][c].alignment) {
+              tableNode.properties.body[r][c].alignment = 'center';
+            }
+          } else {
+            // Body: fontSize: 9, bold: false, alignment: 'center', verticalAlignment: 'middle'
+            newEl.properties.fontSize = 9;
+            newEl.properties.bold = false;
+            newEl.properties.alignment = 'center';
+            // Aplicar também na célula
+            if (!tableNode.properties.body[r][c].fontSize) {
+              tableNode.properties.body[r][c].fontSize = 9;
+            }
+            if (tableNode.properties.body[r][c].bold === undefined) {
+              tableNode.properties.body[r][c].bold = false;
+            }
+            if (!tableNode.properties.body[r][c].alignment) {
+              tableNode.properties.body[r][c].alignment = 'center';
+            }
+            // verticalAlignment deve estar na célula, não no texto
+            if (!tableNode.properties.body[r][c].verticalAlignment) {
+              tableNode.properties.body[r][c].verticalAlignment = 'middle';
+            }
+          }
+        }
+        
         tableNode.properties.body[r][c].children.push(newEl);
         selectedElementId = newEl.id;
       }
@@ -3150,6 +3264,42 @@ function renderElementRecursive(el) {
         } catch (e) {
           box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Erro no SVG</div>';
         }
+        preview.appendChild(box);
+      }
+      else if (el.type === 'barcode') {
+        const box = document.createElement('div');
+        box.className = 'preview-barcode';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        box.style.padding = '1rem';
+        box.style.minHeight = '60px';
+        box.style.border = '1px solid #d1d5db';
+        box.style.borderRadius = '0.375rem';
+        box.style.background = '#ffffff';
+        
+        try {
+          // Gerar SVG do barcode usando JsBarcode
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          const p = el.properties || {};
+          
+          if (typeof JsBarcode !== 'undefined') {
+            JsBarcode(svg, p.barcodeValue || "", {
+              format: p.format || "CODE128",
+              width: Number(p.lineWidth) || 1.5,
+              height: Number(p.barHeight) || 30,
+              displayValue: p.displayValue !== false,
+              fontSize: Number(p.fontSize) || 10,
+              margin: Number(p.margin) || 0
+            });
+            box.appendChild(svg);
+          } else {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">Barcode: ' + escapeHtml(p.barcodeValue || '') + '</div>';
+          }
+        } catch (e) {
+          box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Barcode inválido</div>';
+        }
+        
         preview.appendChild(box);
       }
       else {
@@ -4295,6 +4445,9 @@ function renderElementRecursive(el) {
         case 'svg':
           html += renderInspectorSVG(element);
           break;
+        case 'barcode':
+          html += renderInspectorBarcode(element);
+          break;
         case 'group':
           html += renderInspectorGroup(element);
           break;
@@ -5436,6 +5589,79 @@ function renderElementRecursive(el) {
         <div class="inspector-field">
           <label class="smallNote">Alinhamento</label>
           <select id="insp-svgAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorBarcode(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>Valor do Barcode</label>
+          <input type="text" id="insp-barcodeValue" value="${escapeHtml(p.barcodeValue || 'ABC123456789')}" placeholder="ABC123456789">
+          <div class="smallNote">Digite o valor que será codificado no barcode</div>
+        </div>
+        <div class="inspector-field">
+          <label>Formato</label>
+          <select id="insp-barcodeFormat">
+            <option value="CODE128" ${p.format === 'CODE128' || !p.format ? 'selected' : ''}>CODE128</option>
+            <option value="CODE39" ${p.format === 'CODE39' ? 'selected' : ''}>CODE39</option>
+            <option value="EAN13" ${p.format === 'EAN13' ? 'selected' : ''}>EAN13</option>
+            <option value="EAN8" ${p.format === 'EAN8' ? 'selected' : ''}>EAN8</option>
+            <option value="UPC" ${p.format === 'UPC' ? 'selected' : ''}>UPC</option>
+            <option value="ITF" ${p.format === 'ITF' ? 'selected' : ''}>ITF</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Line Width</label>
+              <input type="number" id="insp-barcodeLineWidth" value="${p.lineWidth || 1.5}" min="0.5" max="5" step="0.1">
+            </div>
+            <div>
+              <label class="smallNote">Height</label>
+              <input type="number" id="insp-barcodeHeight" value="${p.barHeight || 30}" min="10" max="200">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label>
+            <input type="checkbox" id="insp-barcodeDisplayValue" ${p.displayValue !== false ? 'checked' : ''}>
+            <span style="margin-left: 0.5rem;">Display Value</span>
+          </label>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Font Size</label>
+              <input type="number" id="insp-barcodeFontSize" value="${p.fontSize || 10}" min="8" max="20">
+            </div>
+            <div>
+              <label class="smallNote">Margin</label>
+              <input type="number" id="insp-barcodeMargin" value="${p.margin || 0}" min="0" max="20">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label>Fit (Largura x Altura)</label>
+          <div class="row">
+            <div>
+              <input type="number" id="insp-barcodeFitW" value="${p.fit ? p.fit[0] : 201}" min="50" max="500">
+            </div>
+            <div>
+              <input type="number" id="insp-barcodeFitH" value="${p.fit ? p.fit[1] : 42}" min="20" max="200">
+            </div>
+          </div>
+          <div class="smallNote">Tamanho do barcode no PDF (em pixels)</div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-barcodeAlignment">
             <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
             <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
             <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
@@ -7364,6 +7590,118 @@ function renderElementRecursive(el) {
             });
           }
           break;
+          
+        case 'barcode':
+          const barcodeValueInput = document.getElementById('insp-barcodeValue');
+          const barcodeFormatSelect = document.getElementById('insp-barcodeFormat');
+          const barcodeLineWidthInput = document.getElementById('insp-barcodeLineWidth');
+          const barcodeHeightInput = document.getElementById('insp-barcodeHeight');
+          const barcodeDisplayValueCheck = document.getElementById('insp-barcodeDisplayValue');
+          const barcodeFontSizeInput = document.getElementById('insp-barcodeFontSize');
+          const barcodeMarginInput = document.getElementById('insp-barcodeMargin');
+          const barcodeFitWInput = document.getElementById('insp-barcodeFitW');
+          const barcodeFitHInput = document.getElementById('insp-barcodeFitH');
+          const barcodeAlignmentSelect = document.getElementById('insp-barcodeAlignment');
+          
+          if (barcodeValueInput) {
+            barcodeValueInput.addEventListener('input', () => {
+              p.barcodeValue = barcodeValueInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeFormatSelect) {
+            barcodeFormatSelect.addEventListener('change', () => {
+              p.format = barcodeFormatSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeLineWidthInput) {
+            barcodeLineWidthInput.addEventListener('input', () => {
+              const rawValue = barcodeLineWidthInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.lineWidth = parseFloat(rawValue) || 1.5;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeHeightInput) {
+            barcodeHeightInput.addEventListener('input', () => {
+              const rawValue = barcodeHeightInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.barHeight = parseInt(rawValue) || 30;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeDisplayValueCheck) {
+            barcodeDisplayValueCheck.addEventListener('change', () => {
+              p.displayValue = barcodeDisplayValueCheck.checked;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeFontSizeInput) {
+            barcodeFontSizeInput.addEventListener('input', () => {
+              const rawValue = barcodeFontSizeInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.fontSize = parseInt(rawValue) || 10;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeMarginInput) {
+            barcodeMarginInput.addEventListener('input', () => {
+              const rawValue = barcodeMarginInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.margin = parseInt(rawValue) || 0;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeFitWInput) {
+            barcodeFitWInput.addEventListener('input', () => {
+              const rawValue = barcodeFitWInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                if (!p.fit) p.fit = [201, 42];
+                p.fit[0] = parseInt(rawValue) || 201;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeFitHInput) {
+            barcodeFitHInput.addEventListener('input', () => {
+              const rawValue = barcodeFitHInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                if (!p.fit) p.fit = [201, 42];
+                p.fit[1] = parseInt(rawValue) || 42;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeAlignmentSelect) {
+            barcodeAlignmentSelect.addEventListener('change', () => {
+              p.alignment = barcodeAlignmentSelect.value;
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          break;
       }
     }
 
@@ -7372,7 +7710,7 @@ function renderElementRecursive(el) {
     // -----------------------
     function elementToPdfmake(el, context = {}) {
       const p = el.properties || {};
-      const { inHeader = false, inFooter = false } = context;
+      const { inHeader = false, inFooter = false, inTableCell = false } = context;
 
       // helper for common props
       const common = {};
@@ -7530,6 +7868,41 @@ function renderElementRecursive(el) {
         return svgObj;
       }
 
+      if (el.type === 'barcode') {
+        // Formato obrigatório: { alignment: 'center', verticalAlignment: 'middle', stack: [{ barcode: 'VALOR', fit: [201, 42] }] }
+        const barcodeObj = {
+          barcode: p.barcodeValue || 'ABC123456789',
+          fit: p.fit || [201, 42]
+        };
+        
+        // Adicionar propriedades extras se necessário (para o script_fixo do Bubble)
+        if (p.format) barcodeObj.barcodeFormat = p.format;
+        if (p.lineWidth !== undefined) barcodeObj.barcodeWidth = Number(p.lineWidth);
+        if (p.barHeight !== undefined) barcodeObj.barcodeHeight = Number(p.barHeight);
+        if (p.displayValue !== undefined) barcodeObj.barcodeDisplayValue = p.displayValue;
+        if (p.fontSize !== undefined) barcodeObj.barcodeFontSize = Number(p.fontSize);
+        if (p.margin !== undefined) barcodeObj.barcodeMargin = Number(p.margin);
+        
+        const stackObj = {
+          alignment: p.alignment || 'center',
+          stack: [barcodeObj]
+        };
+        
+        // Se estiver dentro de célula de tabela, adicionar verticalAlignment
+        if (inTableCell) {
+          stackObj.verticalAlignment = p.verticalAlignment || 'middle';
+        } else if (p.verticalAlignment) {
+          stackObj.verticalAlignment = p.verticalAlignment;
+        }
+        
+        // Aplicar margin se existir
+        if (Array.isArray(p.margin)) {
+          stackObj.margin = p.margin;
+        }
+        
+        return stackObj;
+      }
+
       if (el.type === 'group') {
         // group no editor = stack no PDF
         // Passar contexto para elementos filhos (se estiver em header/footer, manter contexto)
@@ -7621,7 +7994,8 @@ function renderElementRecursive(el) {
             
             // Processar conteúdo da célula
             // Passar contexto para elementos filhos (se estiver em header/footer, manter contexto)
-            const kids = (cell.children || []).map(ch => elementToPdfmake(ch, context));
+            // Adicionar flag inTableCell para barcode aplicar verticalAlignment
+            const kids = (cell.children || []).map(ch => elementToPdfmake(ch, { ...context, inTableCell: true }));
             const cellContent = (kids.length <= 1) ? (kids[0] || '') : { stack: kids };
             
             // Aplicar estilos da célula
@@ -7682,6 +8056,11 @@ function renderElementRecursive(el) {
               if (cell.borderColor.some(c => c && c.trim())) {
                 cellObj.borderColor = cell.borderColor.map(c => c || '');
               }
+            }
+            
+            // verticalAlignment (deve estar na célula, não no texto)
+            if (cell.verticalAlignment) {
+              cellObj.verticalAlignment = cell.verticalAlignment;
             }
             
             processedRow.push(cellObj);
@@ -7826,16 +8205,19 @@ function renderElementRecursive(el) {
           }
           
           // Padding (deve ser função, não valor fixo)
+          // Template oficial: funções simples que retornam valores fixos
           if (p.customLayout.paddingLeft !== undefined) {
             const paddingLeft = Number(p.customLayout.paddingLeft);
+            // Template padrão: função simples sem condições
             customLayout.paddingLeft = new Function('i', 
-              `return i === 0 ? 0 : ${paddingLeft};`
+              `return ${paddingLeft};`
             );
           }
           if (p.customLayout.paddingRight !== undefined) {
             const paddingRight = Number(p.customLayout.paddingRight);
+            // Template padrão: função simples sem condições
             customLayout.paddingRight = new Function('i', 'node', 
-              `return (i === node.table.widths.length - 1) ? 0 : ${paddingRight};`
+              `return ${paddingRight};`
             );
           }
           if (p.customLayout.paddingTop !== undefined) {
@@ -7875,6 +8257,14 @@ function renderElementRecursive(el) {
             customLayout.defaultBorder = p.customLayout.defaultBorder;
           }
           
+          // fillColor para template padrão (quando fillColor é true, significa usar template)
+          if (p.customLayout.fillColor === true) {
+            // Template oficial: fillColor(rowIndex) com cinza #EDEDED somente no header (rowIndex === 0)
+            customLayout.fillColor = new Function('rowIndex', 
+              `return rowIndex === 0 ? '#EDEDED' : null;`
+            );
+          }
+          
           if (Object.keys(customLayout).length > 0) {
             // Layout deve ficar no mesmo nível que table, não dentro de table
             tableObj.layout = customLayout;
@@ -7889,8 +8279,10 @@ function renderElementRecursive(el) {
         if (p.dontBreakRows) tableObj.table.dontBreakRows = true;
         if (p.keepWithHeaderRows) tableObj.table.keepWithHeaderRows = p.keepWithHeaderRows;
         
-        // headerRows deve ser definido se houver cabeçalho (primeira linha)
-        if (body.length > 0) {
+        // headerRows deve ser definido conforme propriedade da tabela ou padrão 1
+        if (p.headerRows !== undefined) {
+          tableObj.table.headerRows = p.headerRows;
+        } else if (body.length > 0) {
           tableObj.table.headerRows = 1;
         }
         
