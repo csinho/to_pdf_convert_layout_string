@@ -1495,6 +1495,8 @@
     
             <button class="btn primary" id="previewBtn">Pré-visualizar PDF</button>
             <button class="btn primary" id="bubbleTestBtn">Teste Bubble</button>
+            <button class="btn" id="saveTemplateBtn" title="Salvar template atual">💾 Salvar Template</button>
+            <button class="btn" id="loadTemplateBtn" title="Carregar template salvo">📂 Carregar Template</button>
             <button class="btn" id="clearBtn">Limpar</button>
           </div>
       </div>
@@ -2341,8 +2343,15 @@
       }
 
       selectedElementId = parent.id;
-      allowCanvasSizeAdjust = true; // Permitir ajuste ao deletar elemento
-      renderAll();
+      resetCanvasSizeCache();
+      // Renderizar primeiro sem ajustar tamanho
+      renderAll(false);
+      // Depois, permitir ajuste e fazer ajuste único após um delay
+      setTimeout(() => {
+        allowCanvasSizeAdjust = true;
+        renderAll(true);
+        allowCanvasSizeAdjust = false;
+      }, 100);
       saveState();
     }
 
@@ -2368,8 +2377,15 @@
         swap(info.parent.properties.body[ctx.row][ctx.col].children, ctx.index, ctx.index + dir);
       }
 
-      allowCanvasSizeAdjust = true; // Permitir ajuste ao mover elemento
-      renderAll();
+      resetCanvasSizeCache();
+      // Renderizar primeiro sem ajustar tamanho
+      renderAll(false);
+      // Depois, permitir ajuste e fazer ajuste único após um delay
+      setTimeout(() => {
+        allowCanvasSizeAdjust = true;
+        renderAll(true);
+        allowCanvasSizeAdjust = false;
+      }, 100);
     }
 
     // -----------------------
@@ -2422,13 +2438,27 @@
 
       // Primeiro elemento TEM que ser group, como antes
       if (!getRootGroup()) {
-        if (type !== 'group') return;
+        if (type !== 'group') {
+          if (typeof showAlertModal === 'function') {
+            showAlertModal(
+              'Erro ao Adicionar Elemento',
+              'O primeiro elemento no canvas deve ser um Grupo.\n\nPor favor, arraste um Grupo primeiro para começar a criar seu PDF.'
+            );
+          }
+          return;
+        }
         resetCanvasSizeCache(); // Resetar cache quando conteúdo muda
-        allowCanvasSizeAdjust = true; // Permitir ajuste ao criar grupo inicial
         const g = defaultElement('group');
         elements = [g];
         selectedElementId = g.id;
-        renderAll();
+        // Renderizar primeiro sem ajustar tamanho
+        renderAll(false);
+        // Depois, permitir ajuste e fazer ajuste único após um delay
+        setTimeout(() => {
+          allowCanvasSizeAdjust = true;
+          renderAll(true);
+          allowCanvasSizeAdjust = false;
+        }, 100);
           return;
         }
 
@@ -2439,7 +2469,6 @@
 
     function insertIntoTarget(target, type) {
       resetCanvasSizeCache(); // Resetar cache quando conteúdo muda
-      allowCanvasSizeAdjust = true; // Permitir ajuste ao adicionar elemento
       const root = getRootGroup();
       const newEl = defaultElement(type);
 
@@ -2450,7 +2479,14 @@
         }
         documentHeader.root.properties.children.push(newEl);
         selectedElementId = newEl.id;
-        renderAll();
+        // Renderizar primeiro sem ajustar tamanho
+        renderAll(false);
+        // Depois, permitir ajuste e fazer ajuste único após um delay
+        setTimeout(() => {
+          allowCanvasSizeAdjust = true;
+          renderAll(true);
+          allowCanvasSizeAdjust = false;
+        }, 100);
         saveState();
           return;
         }
@@ -2461,7 +2497,14 @@
         }
         documentFooter.root.properties.children.push(newEl);
         selectedElementId = newEl.id;
-        renderAll();
+        // Renderizar primeiro sem ajustar tamanho
+        renderAll(false);
+        // Depois, permitir ajuste e fazer ajuste único após um delay
+        setTimeout(() => {
+          allowCanvasSizeAdjust = true;
+          renderAll(true);
+          allowCanvasSizeAdjust = false;
+        }, 100);
         saveState();
         return;
       }
@@ -2562,7 +2605,15 @@
         selectedElementId = newEl.id;
       }
 
-      renderAll();
+      // Renderizar primeiro sem ajustar tamanho
+      renderAll(false);
+      // Depois, permitir ajuste e fazer ajuste único após um delay para garantir que DOM está pronto
+      setTimeout(() => {
+        allowCanvasSizeAdjust = true;
+        renderAll(true);
+        allowCanvasSizeAdjust = false;
+      }, 100);
+      saveState();
     }
 
     // dropzone handlers (delegação)
@@ -3425,9 +3476,15 @@ function renderElementRecursive(el) {
       // Ajustar altura e largura do canvas dinamicamente baseado no conteúdo
       // IMPORTANTE: Só ajustar se solicitado E se permitido (apenas quando elementos são adicionados/removidos)
       if (shouldAdjustSize && allowCanvasSizeAdjust) {
-        adjustCanvasSize();
-        // Desativar após ajustar para evitar ajustes em cliques subsequentes
-        allowCanvasSizeAdjust = false;
+        // Usar setTimeout para garantir que o DOM está completamente renderizado
+        // Isso evita medições incorretas que causam crescimento infinito
+        setTimeout(() => {
+          if (allowCanvasSizeAdjust) {
+            adjustCanvasSize();
+            // Desativar imediatamente após ajustar para evitar ajustes em cliques subsequentes
+            allowCanvasSizeAdjust = false;
+          }
+        }, 50);
       }
     }
     
@@ -3476,6 +3533,9 @@ function renderElementRecursive(el) {
       }
       
       isAdjustingCanvasSize = true;
+      
+      // IMPORTANTE: Desativar allowCanvasSizeAdjust imediatamente para evitar múltiplas chamadas
+      allowCanvasSizeAdjust = false;
       
       // Aguardar múltiplos frames para garantir que o DOM foi completamente atualizado
       // Isso é importante para elementos aninhados e transições CSS
@@ -3616,7 +3676,12 @@ function renderElementRecursive(el) {
           // Isso evita ajustes infinitos por diferenças mínimas de arredondamento ou medições inconsistentes
           const widthDifference = Math.abs(newWidth - currentCanvasWidth);
           
-          if (widthDifference > 15) {
+          // IMPORTANTE: Limitar o crescimento máximo para evitar crescimento infinito
+          // Se a nova largura for muito maior que a atual (mais de 200px), pode ser um erro de medição
+          const maxWidthIncrease = 200; // Máximo de aumento permitido por vez
+          const shouldApplyWidth = widthDifference > 15 && (newWidth <= currentCanvasWidth + maxWidthIncrease);
+          
+          if (shouldApplyWidth) {
             // 7. Aplicar largura no canvas APENAS se realmente necessário
             canvas.style.width = newWidth + 'px';
             canvas.style.minWidth = minWidth + 'px';
@@ -3650,6 +3715,14 @@ function renderElementRecursive(el) {
             // Se não houve alteração, manter a última largura conhecida
             if (lastCanvasWidth === 0) {
               lastCanvasWidth = currentCanvasWidth;
+            }
+            // Se a nova largura é muito maior, pode ser um erro de medição - não aplicar
+            if (newWidth > currentCanvasWidth + 200) {
+              console.warn('Ajuste de largura do canvas ignorado - possível erro de medição:', {
+                current: currentCanvasWidth,
+                calculated: newWidth,
+                difference: widthDifference
+              });
             }
           }
           
@@ -4193,6 +4266,178 @@ function renderElementRecursive(el) {
     }
     window.removeSelectedElement = removeSelectedElement; // Tornar global para uso no onclick
 
+    // Variável global para armazenar propriedades copiadas
+    let copiedElementProperties = null;
+
+    // Duplicar elemento selecionado
+    function duplicateSelectedElement() {
+      if (!selectedElementId) return;
+      
+      const element = findElementById(selectedElementId);
+      if (!element) return;
+      
+      // Criar uma cópia profunda do elemento
+      const duplicated = JSON.parse(JSON.stringify(element));
+      
+      // Gerar novo ID
+      duplicated.id = 'el_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      
+      // Encontrar onde adicionar o elemento duplicado
+      const parentGroupInfo = findParentGroup(selectedElementId);
+      const nodeWithParent = findNodeWithParent(selectedElementId);
+      
+      if (parentGroupInfo) {
+        // Adicionar ao mesmo grupo, após o elemento original
+        const parentGroup = parentGroupInfo.group;
+        const children = parentGroup.properties.children || [];
+        const index = parentGroupInfo.index;
+        children.splice(index + 1, 0, duplicated);
+        parentGroup.properties.children = children;
+      } else if (nodeWithParent && nodeWithParent.parent && nodeWithParent.ctx) {
+        const ctx = nodeWithParent.ctx;
+        if (ctx.kind === 'columns') {
+          const col = nodeWithParent.parent.properties.columns[ctx.colIndex];
+          const children = col.children || [];
+          children.splice(ctx.index + 1, 0, duplicated);
+          col.children = children;
+        } else if (ctx.kind === 'tableCell') {
+          const cell = nodeWithParent.parent.properties.body[ctx.row][ctx.col];
+          const children = cell.children || [];
+          children.splice(ctx.index + 1, 0, duplicated);
+          cell.children = children;
+        } else {
+          // Adicionar ao root
+          const rootGroup = getRootGroup();
+          if (rootGroup) {
+            const children = rootGroup.properties.children || [];
+            const index = children.findIndex(el => el.id === selectedElementId);
+            if (index >= 0) {
+              children.splice(index + 1, 0, duplicated);
+            } else {
+              children.push(duplicated);
+            }
+            rootGroup.properties.children = children;
+          }
+        }
+      } else {
+        // Adicionar ao root
+        const rootGroup = getRootGroup();
+        if (rootGroup) {
+          const children = rootGroup.properties.children || [];
+          const index = children.findIndex(el => el.id === selectedElementId);
+          if (index >= 0) {
+            children.splice(index + 1, 0, duplicated);
+          } else {
+            children.push(duplicated);
+          }
+          rootGroup.properties.children = children;
+        }
+      }
+      
+      // Selecionar o elemento duplicado
+      selectedElementId = duplicated.id;
+      
+      // Resetar cache e renderizar primeiro sem ajustar tamanho
+      resetCanvasSizeCache();
+      if (typeof renderAll === 'function') {
+        renderAll(false);
+      } else if (typeof render === 'function') {
+        render();
+      }
+      
+      // Depois, permitir ajuste e fazer ajuste único após um delay
+      setTimeout(() => {
+        allowCanvasSizeAdjust = true;
+        if (typeof renderAll === 'function') {
+          renderAll(true);
+        }
+        allowCanvasSizeAdjust = false;
+      }, 100);
+      
+      // Atualizar inspector
+      setTimeout(() => {
+        if (typeof renderInspector === 'function') renderInspector();
+      }, 150);
+    }
+    window.duplicateSelectedElement = duplicateSelectedElement;
+
+    // Copiar propriedades do elemento
+    function copyElementProperties() {
+      if (!selectedElementId) return;
+      
+      const element = findElementById(selectedElementId);
+      if (!element) return;
+      
+      // Copiar apenas as propriedades (não o ID nem outras propriedades do elemento)
+      copiedElementProperties = {
+        type: element.type,
+        properties: JSON.parse(JSON.stringify(element.properties || {}))
+      };
+      
+      // Mostrar feedback
+      const btn = document.querySelector('.btn-paste');
+      if (btn) {
+        btn.style.background = '#f59e0b';
+        btn.disabled = false;
+        btn.style.cursor = 'pointer';
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Propriedades Copiadas!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      }
+    }
+    window.copyElementProperties = copyElementProperties;
+
+    // Colar propriedades no elemento selecionado
+    function pasteElementProperties() {
+      if (!selectedElementId || !copiedElementProperties) return;
+      
+      const element = findElementById(selectedElementId);
+      if (!element) return;
+      
+      // Só colar se os tipos forem compatíveis
+      if (element.type !== copiedElementProperties.type) {
+        if (typeof showAlertModal === 'function') {
+          showAlertModal(
+            'Erro ao Colar Propriedades',
+            `Não é possível colar propriedades de um tipo de elemento diferente.\n\nElemento atual: ${getElementTypeName(element.type)}\nElemento copiado: ${getElementTypeName(copiedElementProperties.type)}`
+          );
+        } else {
+          alert('Não é possível colar propriedades de um tipo de elemento diferente.');
+        }
+        return;
+      }
+      
+      // Colar as propriedades (preservar ID e outras propriedades do elemento)
+      element.properties = JSON.parse(JSON.stringify(copiedElementProperties.properties));
+      
+      // Atualizar renderização
+      if (typeof renderAll === 'function') {
+        renderAll();
+      } else if (typeof render === 'function') {
+        render();
+      }
+      
+      // Atualizar inspector
+      setTimeout(() => {
+        if (typeof renderInspector === 'function') renderInspector();
+      }, 100);
+    }
+    window.pasteElementProperties = pasteElementProperties;
+
+    // Helper function para criar tooltips
+    function createTooltip(text, helpText = '') {
+      if (!text) return '';
+      const tooltipId = 'tooltip_' + Math.random().toString(36).substr(2, 9);
+      const fullText = helpText ? text + '\\n\\n' + helpText : text;
+      return `
+        <span style="position: relative; display: inline-block; margin-left: 0.25rem; cursor: help;" title="${escapeHtml(fullText)}">
+          <span style="color: #6b7280; font-size: 0.875rem;">ℹ️</span>
+        </span>
+      `;
+    }
+
     // Get element type name for display
     function getElementTypeName(type) {
       const names = {
@@ -4453,12 +4698,25 @@ function renderElementRecursive(el) {
           break;
       }
 
-      // Adicionar botão de remover no final do inspector
+      // Adicionar botões de ação no final do inspector
       html += `
         <div class="inspector-field" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
-          <button class="btn-remove-large" onclick="removeSelectedElement()" style="width: 100%; padding: 0.75rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.5rem; font-size: 1rem; font-weight: 500; cursor: pointer; transition: background 0.2s;">
-            🗑️ Remover Elemento
-          </button>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <button class="btn-duplicate" onclick="duplicateSelectedElement()" style="padding: 0.75rem 1rem; background: #2563eb; color: white; border: none; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background 0.2s;">
+              📋 Duplicar
+            </button>
+            <button class="btn-copy" onclick="copyElementProperties()" style="padding: 0.75rem 1rem; background: #10b981; color: white; border: none; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background 0.2s;">
+              📄 Copiar
+            </button>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr; gap: 0.5rem;">
+            <button class="btn-paste" onclick="pasteElementProperties()" style="padding: 0.75rem 1rem; background: ${copiedElementProperties ? '#f59e0b' : '#6b7280'}; color: white; border: none; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: ${copiedElementProperties ? 'pointer' : 'not-allowed'}; transition: background 0.2s;" ${!copiedElementProperties ? 'disabled' : ''}>
+              📥 Colar Propriedades
+            </button>
+            <button class="btn-remove-large" onclick="removeSelectedElement()" style="width: 100%; padding: 0.75rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.5rem; font-size: 1rem; font-weight: 500; cursor: pointer; transition: background 0.2s;">
+              🗑️ Remover Elemento
+            </button>
+          </div>
         </div>
       `;
 
@@ -4481,7 +4739,12 @@ function renderElementRecursive(el) {
       
       return `
         <div class="inspector-field">
-              <label>Texto</label>
+          <label>ID do Elemento (para linkToDestination) ${createTooltip('Define um ID único para este elemento. Outros elementos podem usar linkToDestination apontando para este ID.', 'Exemplo: Se definir id="secao1", outros elementos podem usar linkToDestination: "secao1" para criar um link interno.')}</label>
+          <input type="text" id="insp-elementId" value="${escapeHtml(p.id || '')}" placeholder="Ex: secao1, destino1 (deixe vazio se não for destino)">
+          <div class="smallNote">ID único para este elemento. Use para criar destinos de links internos.</div>
+        </div>
+        <div class="inspector-field">
+              <label>Texto ${createTooltip('Conteúdo de texto do elemento. Pode conter múltiplas linhas.', 'Use {{pageNumber}} e {{totalPages}} em headers/footers para numeração de páginas.')}</label>
           <textarea id="insp-text">${escapeHtml(p.text || '')}</textarea>
           ${isInHeaderFooter ? `
             <div class="smallNote" style="margin-top: 0.5rem; padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; border-radius: 0.25rem; color: #1e40af;">
@@ -4490,15 +4753,43 @@ function renderElementRecursive(el) {
           ` : ''}
             </div>
         <div class="inspector-field">
-          <label>Link (URL)</label>
-          <input type="text" id="insp-link" value="${escapeHtml(p.link || '')}" placeholder="https://exemplo.com ou deixe vazio">
-          <div class="smallNote">Deixe vazio se não quiser que o texto seja um link</div>
+          <label>Tipo de Link ${createTooltip('Escolha o tipo de link: URL externa, link para página do PDF ou link para destino/âncora.', 'LinkToPage: número da página (ex: 1, 2, 3). LinkToDestination: nome da âncora definida no documento.')}</label>
+          <select id="insp-linkType">
+            <option value="none" ${(!p._linkType && !p.link && !p.linkToPage && !p.linkToDestination) || p._linkType === 'none' ? 'selected' : ''}>Nenhum</option>
+            <option value="url" ${(p._linkType === 'url' || (p.link && !p.linkToPage && !p.linkToDestination)) ? 'selected' : ''}>URL Externa</option>
+            <option value="page" ${p._linkType === 'page' || p.linkToPage ? 'selected' : ''}>Link para Página</option>
+            <option value="destination" ${p._linkType === 'destination' || p.linkToDestination ? 'selected' : ''}>Link para Destino</option>
+          </select>
+        </div>
+        <div id="insp-linkUrlOptions" style="${(p._linkType === 'url' || (p.link && !p.linkToPage && !p.linkToDestination)) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Link (URL)</label>
+            <input type="text" id="insp-link" value="${escapeHtml(p.link || '')}" placeholder="https://exemplo.com">
+            <div class="smallNote">URL externa para o link</div>
+          </div>
+        </div>
+        <div id="insp-linkPageOptions" style="${(p._linkType === 'page' || p.linkToPage) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Número da Página</label>
+            <input type="number" id="insp-linkToPage" value="${p.linkToPage || 1}" min="1" placeholder="1">
+            <div class="smallNote">Número da página para onde o link aponta (começa em 1)</div>
+          </div>
+        </div>
+        <div id="insp-linkDestinationOptions" style="${(p._linkType === 'destination' || p.linkToDestination) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Nome do Destino (ID do elemento destino)</label>
+            <input type="text" id="insp-linkToDestination" value="${escapeHtml(p.linkToDestination || '')}" placeholder="nome-do-destino">
+            <div class="smallNote" style="margin-top: 0.5rem; padding: 0.75rem; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 0.25rem; color: #92400e;">
+              <strong>⚠️ Importante:</strong> O elemento de destino precisa ter um <strong>ID</strong> definido igual a este valor. Exemplo: Se usar "secao1" aqui, o elemento destino deve ter ID="secao1" no campo "ID do Elemento".
             </div>
+          </div>
+        </div>
         <div class="inspector-field">
           <div class="row">
             <div>
               <label class="smallNote">Tamanho da Fonte</label>
-              <input type="number" id="insp-fontSize" value="${p.fontSize || 14}" min="8" max="72">
+              <input type="number" id="insp-fontSize" value="${p.fontSize || 14}" min="8" max="72" step="1">
+              <div id="insp-fontSizeError" style="display: none; margin-top: 0.25rem; padding: 0.25rem; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 0.25rem; color: #991b1b; font-size: 0.75rem;"></div>
             </div>
             <div>
               <label class="smallNote">Fonte</label>
@@ -4609,14 +4900,46 @@ function renderElementRecursive(el) {
       const p = element.properties || {};
       return `
         <div class="inspector-field">
+          <label>ID do Elemento (para linkToDestination) ${createTooltip('Define um ID único para este elemento. Outros elementos podem usar linkToDestination apontando para este ID.', 'Exemplo: Se definir id="secao1", outros elementos podem usar linkToDestination: "secao1" para criar um link interno.')}</label>
+          <input type="text" id="insp-headerElementId" value="${escapeHtml(p.id || '')}" placeholder="Ex: secao1, destino1 (deixe vazio se não for destino)">
+          <div class="smallNote">ID único para este elemento. Use para criar destinos de links internos.</div>
+        </div>
+        <div class="inspector-field">
               <label>Texto do Cabeçalho</label>
           <input type="text" id="insp-headerText" value="${escapeHtml(p.text || '')}">
             </div>
         <div class="inspector-field">
-          <label>Link (URL)</label>
-          <input type="text" id="insp-headerLink" value="${escapeHtml(p.link || '')}" placeholder="https://exemplo.com ou deixe vazio">
-          <div class="smallNote">Deixe vazio se não quiser que o texto seja um link</div>
+          <label>Tipo de Link</label>
+          <select id="insp-headerLinkType">
+            <option value="none" ${(!p._linkType && !p.link && !p.linkToPage && !p.linkToDestination) || p._linkType === 'none' ? 'selected' : ''}>Nenhum</option>
+            <option value="url" ${(p._linkType === 'url' || (p.link && !p.linkToPage && !p.linkToDestination)) ? 'selected' : ''}>URL Externa</option>
+            <option value="page" ${p._linkType === 'page' || p.linkToPage ? 'selected' : ''}>Link para Página</option>
+            <option value="destination" ${p._linkType === 'destination' || p.linkToDestination ? 'selected' : ''}>Link para Destino</option>
+          </select>
+        </div>
+        <div id="insp-headerLinkUrlOptions" style="${(p._linkType === 'url' || (p.link && !p.linkToPage && !p.linkToDestination)) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Link (URL)</label>
+            <input type="text" id="insp-headerLink" value="${escapeHtml(p.link || '')}" placeholder="https://exemplo.com">
+            <div class="smallNote">URL externa para o link</div>
+          </div>
+        </div>
+        <div id="insp-headerLinkPageOptions" style="${(p._linkType === 'page' || p.linkToPage) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Número da Página</label>
+            <input type="number" id="insp-headerLinkToPage" value="${p.linkToPage || 1}" min="1" placeholder="1">
+            <div class="smallNote">Número da página para onde o link aponta (começa em 1)</div>
+          </div>
+        </div>
+        <div id="insp-headerLinkDestinationOptions" style="${(p._linkType === 'destination' || p.linkToDestination) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Nome do Destino (ID do elemento destino)</label>
+            <input type="text" id="insp-headerLinkToDestination" value="${escapeHtml(p.linkToDestination || '')}" placeholder="nome-do-destino">
+            <div class="smallNote" style="margin-top: 0.5rem; padding: 0.75rem; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 0.25rem; color: #92400e;">
+              <strong>⚠️ Importante:</strong> O elemento de destino precisa ter um <strong>ID</strong> definido igual a este valor. Exemplo: Se usar "secao1" aqui, o elemento destino deve ter ID="secao1" no campo "ID do Elemento".
             </div>
+          </div>
+        </div>
         <div class="inspector-field">
           <div class="row">
             <div>
@@ -4914,6 +5237,13 @@ function renderElementRecursive(el) {
                 (Total: ${numRows} linhas incluindo cabeçalho)
               </div>
             </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Linhas de Cabeçalho (headerRows) ${createTooltip('Define quantas linhas da tabela serão repetidas em cada página como cabeçalho.', 'Padrão: 1 linha. Se definir 2, as duas primeiras linhas serão cabeçalho.')}</label>
+          <input type="number" id="insp-tableHeaderRows" value="${p.headerRows !== undefined ? p.headerRows : 1}" min="0" max="${numRows}">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">
+            Número de linhas que serão consideradas como cabeçalho (padrão: 1)
           </div>
         </div>
         <div class="inspector-field">
@@ -5293,7 +5623,8 @@ function renderElementRecursive(el) {
         <div class="inspector-field">
           <label>URL da Imagem</label>
           <input type="text" id="insp-imageUrl" value="${escapeHtml(p.url || '')}" placeholder="https://exemplo.com/imagem.jpg">
-          <div class="smallNote">Cole a URL completa da imagem</div>
+          <div id="insp-imageUrlError" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 0.25rem; color: #991b1b; font-size: 0.875rem;"></div>
+          <div class="smallNote">Cole a URL completa da imagem (http://, https:// ou data:image)</div>
         </div>
         <div class="inspector-field">
           <label class="smallNote">Modo de Dimensionamento</label>
@@ -5870,9 +6201,24 @@ function renderElementRecursive(el) {
       
       switch (element.type) {
         case 'text':
+          const elementIdInput = document.getElementById('insp-elementId');
           const textInput = document.getElementById('insp-text');
           const textLinkInput = document.getElementById('insp-link');
           const fontSizeInput = document.getElementById('insp-fontSize');
+          
+          if (elementIdInput) {
+            elementIdInput.addEventListener('input', () => {
+              const idValue = elementIdInput.value.trim();
+              if (idValue) {
+                p.id = idValue;
+              } else {
+                delete p.id;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
           const fontSelect = document.getElementById('insp-font');
           const fontFeaturesInput = document.getElementById('insp-fontFeatures');
           const alignmentSelect = document.getElementById('insp-alignment');
@@ -5900,24 +6246,156 @@ function renderElementRecursive(el) {
               }, 300);
             });
           }
+          // Handle link type selector
+          const linkTypeSelect = document.getElementById('insp-linkType');
+          const linkUrlOptions = document.getElementById('insp-linkUrlOptions');
+          const linkPageOptions = document.getElementById('insp-linkPageOptions');
+          const linkDestinationOptions = document.getElementById('insp-linkDestinationOptions');
+          
+          if (linkTypeSelect) {
+            linkTypeSelect.addEventListener('change', () => {
+              const linkType = linkTypeSelect.value;
+              
+              // Preservar o tipo escolhido mesmo quando não há valor ainda
+              p._linkType = linkType;
+              
+              // Show/hide options
+              if (linkUrlOptions) linkUrlOptions.style.display = linkType === 'url' ? '' : 'none';
+              if (linkPageOptions) linkPageOptions.style.display = linkType === 'page' ? '' : 'none';
+              if (linkDestinationOptions) linkDestinationOptions.style.display = linkType === 'destination' ? '' : 'none';
+              
+              // Apenas limpar propriedades se mudou para 'none', caso contrário manter valores existentes
+              if (linkType === 'none') {
+                delete p.link;
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                delete p._linkType;
+              } else if (linkType === 'url') {
+                // Se mudou para URL, limpar outros tipos mas manter URL se existir
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                // Não limpar p.link - deixar o usuário preencher ou manter se já existe
+              } else if (linkType === 'page') {
+                // Se mudou para página, limpar outros tipos mas manter linkToPage se existir
+                delete p.link;
+                delete p.linkToDestination;
+                if (!p.linkToPage && linkToPageInput) {
+                  // Se não tinha página, definir padrão 1
+                  p.linkToPage = 1;
+                  if (linkToPageInput) linkToPageInput.value = 1;
+                }
+              } else if (linkType === 'destination') {
+                // Se mudou para destino, limpar outros tipos mas manter linkToDestination se existir
+                delete p.link;
+                delete p.linkToPage;
+                // Não limpar p.linkToDestination - deixar o usuário preencher ou manter se já existe
+              }
+              
+              // Não re-renderizar o inspector para não perder a seleção do dropdown
+              // Apenas atualizar a renderização do canvas se necessário
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          
           if (textLinkInput) {
             textLinkInput.addEventListener('input', () => { 
-              p.link = textLinkInput.value.trim() || null;
+              const urlValue = textLinkInput.value.trim();
+              if (urlValue) {
+                p.link = urlValue;
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                p._linkType = 'url'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'url') {
+                  delete p.link;
+                } else {
+                  delete p.link;
+                  delete p._linkType;
+                }
+              }
               updateWithoutLosingFocus(() => {
                 // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
                 if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
+          
+          const linkToPageInput = document.getElementById('insp-linkToPage');
+          if (linkToPageInput) {
+            linkToPageInput.addEventListener('input', () => {
+              const pageNum = parseInt(linkToPageInput.value);
+              if (pageNum > 0) {
+                p.linkToPage = pageNum;
+                delete p.link;
+                delete p.linkToDestination;
+                p._linkType = 'page'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'page') {
+                  delete p.linkToPage;
+                } else {
+                  delete p.linkToPage;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          const linkToDestinationInput = document.getElementById('insp-linkToDestination');
+          if (linkToDestinationInput) {
+            linkToDestinationInput.addEventListener('input', () => {
+              const dest = linkToDestinationInput.value.trim();
+              if (dest) {
+                p.linkToDestination = dest;
+                delete p.link;
+                delete p.linkToPage;
+                p._linkType = 'destination'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'destination') {
+                  delete p.linkToDestination;
+                } else {
+                  delete p.linkToDestination;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
           if (fontSizeInput) {
+            const fontSizeError = document.getElementById('insp-fontSizeError');
+            
             fontSizeInput.addEventListener('input', () => { 
               // IMPORTANTE: Não processar o valor imediatamente para inputs number
               // Deixar o valor como string durante a digitação para preservar posição do cursor
               const rawValue = fontSizeInput.value;
-              // Apenas atualizar a propriedade se o valor for válido (não vazio e numérico)
+              
+              // Validar range
               if (rawValue !== '' && !isNaN(rawValue)) {
-                p.fontSize = parseInt(rawValue);
+                const fontSize = parseInt(rawValue);
+                if (fontSize < 8 || fontSize > 72) {
+                  if (fontSizeError) {
+                    fontSizeError.textContent = `⚠️ Tamanho da fonte deve estar entre 8 e 72 (valor atual: ${fontSize})`;
+                    fontSizeError.style.display = 'block';
+                  }
+                } else {
+                  if (fontSizeError) {
+                    fontSizeError.style.display = 'none';
+                  }
+                  p.fontSize = fontSize;
+                }
+              } else if (rawValue === '') {
+                if (fontSizeError) {
+                  fontSizeError.style.display = 'none';
+                }
               }
+              
               updateParentGroupsDimensions(element.id);
               updateWithoutLosingFocus(() => {
                 // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
@@ -6077,9 +6555,24 @@ function renderElementRecursive(el) {
           break;
           
         case 'header':
+          const headerElementIdInput = document.getElementById('insp-headerElementId');
           const headerTextInput = document.getElementById('insp-headerText');
           const headerLinkInput = document.getElementById('insp-headerLink');
           const headerFontSizeInput = document.getElementById('insp-headerFontSize');
+          
+          if (headerElementIdInput) {
+            headerElementIdInput.addEventListener('input', () => {
+              const idValue = headerElementIdInput.value.trim();
+              if (idValue) {
+                p.id = idValue;
+              } else {
+                delete p.id;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
           const headerFontSelect = document.getElementById('insp-headerFont');
           const headerFontFeaturesInput = document.getElementById('insp-headerFontFeatures');
           const headerAlignmentSelect = document.getElementById('insp-headerAlignment');
@@ -6106,11 +6599,124 @@ function renderElementRecursive(el) {
               }, 300);
             });
           }
+          // Handle header link type selector
+          const headerLinkTypeSelect = document.getElementById('insp-headerLinkType');
+          const headerLinkUrlOptions = document.getElementById('insp-headerLinkUrlOptions');
+          const headerLinkPageOptions = document.getElementById('insp-headerLinkPageOptions');
+          const headerLinkDestinationOptions = document.getElementById('insp-headerLinkDestinationOptions');
+          
+          if (headerLinkTypeSelect) {
+            headerLinkTypeSelect.addEventListener('change', () => {
+              const linkType = headerLinkTypeSelect.value;
+              
+              // Preservar o tipo escolhido mesmo quando não há valor ainda
+              p._linkType = linkType;
+              
+              // Show/hide options
+              if (headerLinkUrlOptions) headerLinkUrlOptions.style.display = linkType === 'url' ? '' : 'none';
+              if (headerLinkPageOptions) headerLinkPageOptions.style.display = linkType === 'page' ? '' : 'none';
+              if (headerLinkDestinationOptions) headerLinkDestinationOptions.style.display = linkType === 'destination' ? '' : 'none';
+              
+              // Apenas limpar propriedades se mudou para 'none', caso contrário manter valores existentes
+              if (linkType === 'none') {
+                delete p.link;
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                delete p._linkType;
+              } else if (linkType === 'url') {
+                // Se mudou para URL, limpar outros tipos mas manter URL se existir
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                // Não limpar p.link - deixar o usuário preencher ou manter se já existe
+              } else if (linkType === 'page') {
+                // Se mudou para página, limpar outros tipos mas manter linkToPage se existir
+                delete p.link;
+                delete p.linkToDestination;
+                if (!p.linkToPage && headerLinkToPageInput) {
+                  // Se não tinha página, definir padrão 1
+                  p.linkToPage = 1;
+                  if (headerLinkToPageInput) headerLinkToPageInput.value = 1;
+                }
+              } else if (linkType === 'destination') {
+                // Se mudou para destino, limpar outros tipos mas manter linkToDestination se existir
+                delete p.link;
+                delete p.linkToPage;
+                // Não limpar p.linkToDestination - deixar o usuário preencher ou manter se já existe
+              }
+              
+              // Não re-renderizar o inspector para não perder a seleção do dropdown
+              // Apenas atualizar a renderização do canvas se necessário
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          
           if (headerLinkInput) {
             headerLinkInput.addEventListener('input', () => { 
-              p.link = headerLinkInput.value.trim() || null;
+              const urlValue = headerLinkInput.value.trim();
+              if (urlValue) {
+                p.link = urlValue;
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                p._linkType = 'url'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'url') {
+                  delete p.link;
+                } else {
+                  delete p.link;
+                  delete p._linkType;
+                }
+              }
               updateWithoutLosingFocus(() => {
                 // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          const headerLinkToPageInput = document.getElementById('insp-headerLinkToPage');
+          if (headerLinkToPageInput) {
+            headerLinkToPageInput.addEventListener('input', () => {
+              const pageNum = parseInt(headerLinkToPageInput.value);
+              if (pageNum > 0) {
+                p.linkToPage = pageNum;
+                delete p.link;
+                delete p.linkToDestination;
+                p._linkType = 'page'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'page') {
+                  delete p.linkToPage;
+                } else {
+                  delete p.linkToPage;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          const headerLinkToDestinationInput = document.getElementById('insp-headerLinkToDestination');
+          if (headerLinkToDestinationInput) {
+            headerLinkToDestinationInput.addEventListener('input', () => {
+              const dest = headerLinkToDestinationInput.value.trim();
+              if (dest) {
+                p.linkToDestination = dest;
+                delete p.link;
+                delete p.linkToPage;
+                p._linkType = 'destination'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'destination') {
+                  delete p.linkToDestination;
+                } else {
+                  delete p.linkToDestination;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
                 if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
@@ -6479,7 +7085,24 @@ function renderElementRecursive(el) {
         case 'table':
           const tableColsInput = document.getElementById('insp-tableCols');
           const tableRowsInput = document.getElementById('insp-tableRows');
+          const tableHeaderRowsInput = document.getElementById('insp-tableHeaderRows');
           const tableLayoutSelect = document.getElementById('insp-tableLayout');
+          
+          if (tableHeaderRowsInput) {
+            tableHeaderRowsInput.addEventListener('input', () => {
+              const headerRows = parseInt(tableHeaderRowsInput.value) || 1;
+              const numRows = (p.body || []).length;
+              if (headerRows >= 0 && headerRows <= numRows) {
+                p.headerRows = headerRows;
+              } else {
+                p.headerRows = Math.max(0, Math.min(headerRows, numRows));
+                tableHeaderRowsInput.value = p.headerRows;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
           
           if (tableColsInput || tableRowsInput) {
             const updateTable = () => {
@@ -7162,8 +7785,43 @@ function renderElementRecursive(el) {
           }
           
           if (imageUrlInput) {
+            const imageUrlError = document.getElementById('insp-imageUrlError');
+            
+            // Função de validação de URL
+            const validateImageUrl = (url) => {
+              if (!url) {
+                if (imageUrlError) {
+                  imageUrlError.style.display = 'none';
+                }
+                return true;
+              }
+              
+              // Verificar se é URL válida ou data URI
+              const isValidUrl = url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/');
+              const isValidFormat = /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url) || url.startsWith('data:image/');
+              
+              if (!isValidUrl && !url.startsWith('data:image/')) {
+                if (imageUrlError) {
+                  imageUrlError.textContent = '⚠️ URL inválida. Use http://, https:// ou data:image/';
+                  imageUrlError.style.display = 'block';
+                }
+                return false;
+              }
+              
+              if (imageUrlError) {
+                imageUrlError.style.display = 'none';
+              }
+              return true;
+            };
+            
             imageUrlInput.addEventListener('input', async () => { 
               const url = imageUrlInput.value.trim();
+              
+              // Validar URL
+              if (!validateImageUrl(url)) {
+                return;
+              }
+              
               p.url = url;
               
               // Converter URL para base64 apenas para preview visual
@@ -7726,6 +8384,11 @@ function renderElementRecursive(el) {
           bold: !!p.bold
         };
         
+        // ID do elemento (para linkToDestination)
+        if (p.id && p.id.trim()) {
+          headerObj.id = p.id.trim();
+        }
+        
         // Styling completo
         if (p.color) headerObj.color = p.color;
         if (p.background) headerObj.background = p.background;
@@ -7742,6 +8405,10 @@ function renderElementRecursive(el) {
         // Link
         if (p.link && p.link.trim()) {
           headerObj.link = p.link.trim();
+        } else if (p.linkToPage) {
+          headerObj.linkToPage = p.linkToPage;
+        } else if (p.linkToDestination) {
+          headerObj.linkToDestination = p.linkToDestination;
         }
         
         return headerObj;
@@ -7768,6 +8435,11 @@ function renderElementRecursive(el) {
           fontSize: Number(p.fontSize || 14)
         };
         
+        // ID do elemento (para linkToDestination)
+        if (p.id && p.id.trim()) {
+          textObj.id = p.id.trim();
+        }
+        
         // Styling completo
         if (p.color) textObj.color = p.color;
         if (p.background) textObj.background = p.background;
@@ -7785,6 +8457,10 @@ function renderElementRecursive(el) {
         // Link
         if (p.link && p.link.trim()) {
           textObj.link = p.link.trim();
+        } else if (p.linkToPage) {
+          textObj.linkToPage = p.linkToPage;
+        } else if (p.linkToDestination) {
+          textObj.linkToDestination = p.linkToDestination;
         }
         
         return textObj;
@@ -9721,6 +10397,330 @@ function renderElementRecursive(el) {
       clearAll();
     });
 
+    // Sistema de Templates
+    const TEMPLATE_STORAGE_KEY = 'pdf_editor_templates';
+    
+    function saveTemplate() {
+      const modal = document.getElementById('saveTemplateModal');
+      const input = document.getElementById('saveTemplateNameInput');
+      const errorDiv = document.getElementById('saveTemplateError');
+      
+      if (modal && input) {
+        input.value = '';
+        errorDiv.style.display = 'none';
+        modal.classList.add('active');
+        input.focus();
+        
+        // Permitir salvar com Enter
+        input.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            confirmSaveTemplate();
+          }
+        });
+      }
+    }
+    window.saveTemplate = saveTemplate;
+    
+    function confirmSaveTemplate() {
+      const input = document.getElementById('saveTemplateNameInput');
+      const errorDiv = document.getElementById('saveTemplateError');
+      const templateName = input?.value.trim();
+      
+      if (!templateName) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Por favor, digite um nome para o template.';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+      
+      try {
+        const rootGroup = getRootGroup();
+        const template = {
+          name: templateName,
+          date: new Date().toISOString(),
+          rootGroup: rootGroup ? JSON.parse(JSON.stringify(rootGroup)) : null,
+          documentHeader: documentHeader ? JSON.parse(JSON.stringify(documentHeader)) : null,
+          documentFooter: documentFooter ? JSON.parse(JSON.stringify(documentFooter)) : null,
+          documentWatermark: documentWatermark ? JSON.parse(JSON.stringify(documentWatermark)) : null,
+          documentTOC: documentTOC ? JSON.parse(JSON.stringify(documentTOC)) : null,
+          documentSecurity: documentSecurity ? JSON.parse(JSON.stringify(documentSecurity)) : null,
+          documentPageInfo: documentPageInfo ? JSON.parse(JSON.stringify(documentPageInfo)) : null,
+          documentCompress: documentCompress,
+          pageSize: pageSizeSel?.value || 'A4',
+          orientation: document.getElementById('orientation')?.value || 'portrait',
+          margins: [
+            parseInt(document.getElementById('mL')?.value || 40),
+            parseInt(document.getElementById('mT')?.value || 60),
+            parseInt(document.getElementById('mR')?.value || 40),
+            parseInt(document.getElementById('mB')?.value || 60)
+          ]
+        };
+        
+        let templates = [];
+        try {
+          const stored = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+          if (stored) {
+            templates = JSON.parse(stored);
+          }
+        } catch (e) {
+          console.warn('Erro ao carregar templates:', e);
+        }
+        
+        // Remover template com mesmo nome se existir
+        templates = templates.filter(t => t.name !== template.name);
+        templates.push(template);
+        
+        localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+        closeSaveTemplateModal();
+        
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Sucesso', `Template "${templateName}" salvo com sucesso!`);
+        }
+      } catch (e) {
+        console.error('Erro ao salvar template:', e);
+        if (errorDiv) {
+          errorDiv.textContent = 'Erro ao salvar template: ' + e.message;
+          errorDiv.style.display = 'block';
+        }
+      }
+    }
+    window.confirmSaveTemplate = confirmSaveTemplate;
+    
+    function closeSaveTemplateModal() {
+      const modal = document.getElementById('saveTemplateModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+    window.closeSaveTemplateModal = closeSaveTemplateModal;
+    
+    function loadTemplate() {
+      const modal = document.getElementById('loadTemplateModal');
+      const listDiv = document.getElementById('loadTemplateList');
+      const emptyDiv = document.getElementById('loadTemplateEmpty');
+      
+      if (!modal || !listDiv) return;
+      
+      try {
+        const stored = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+        if (!stored) {
+          if (emptyDiv) emptyDiv.style.display = 'block';
+          if (listDiv) listDiv.style.display = 'none';
+          modal.classList.add('active');
+          return;
+        }
+        
+        const templates = JSON.parse(stored);
+        if (!templates || templates.length === 0) {
+          if (emptyDiv) emptyDiv.style.display = 'block';
+          if (listDiv) listDiv.style.display = 'none';
+          modal.classList.add('active');
+          return;
+        }
+        
+        // Criar lista de templates
+        listDiv.innerHTML = '';
+        templates.forEach((template, index) => {
+          const templateItem = document.createElement('div');
+          templateItem.style.cssText = 'padding: 1rem; margin-bottom: 0.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer; transition: background 0.2s;';
+          templateItem.onmouseenter = () => templateItem.style.background = '#f3f4f6';
+          templateItem.onmouseleave = () => templateItem.style.background = 'white';
+          
+          const nameDiv = document.createElement('div');
+          nameDiv.style.cssText = 'font-weight: 600; color: #111827; margin-bottom: 0.25rem;';
+          nameDiv.textContent = template.name;
+          
+          const dateDiv = document.createElement('div');
+          dateDiv.style.cssText = 'font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;';
+          dateDiv.textContent = `Salvo em: ${new Date(template.date).toLocaleString('pt-BR')}`;
+          
+          const buttonDiv = document.createElement('div');
+          buttonDiv.style.cssText = 'display: flex; gap: 0.5rem;';
+          
+          const loadBtn = document.createElement('button');
+          loadBtn.textContent = '📂 Carregar';
+          loadBtn.style.cssText = 'flex: 1; padding: 0.5rem; background: #2563eb; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;';
+          loadBtn.onclick = (e) => {
+            e.stopPropagation();
+            loadTemplateConfirm(template);
+          };
+          
+          const deleteBtn = document.createElement('button');
+          deleteBtn.textContent = '🗑️ Deletar';
+          deleteBtn.style.cssText = 'flex: 1; padding: 0.5rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;';
+          deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteTemplate(template.name, index);
+          };
+          
+          buttonDiv.appendChild(loadBtn);
+          buttonDiv.appendChild(deleteBtn);
+          
+          templateItem.appendChild(nameDiv);
+          templateItem.appendChild(dateDiv);
+          templateItem.appendChild(buttonDiv);
+          
+          listDiv.appendChild(templateItem);
+        });
+        
+        if (emptyDiv) emptyDiv.style.display = 'none';
+        if (listDiv) listDiv.style.display = 'block';
+        modal.classList.add('active');
+      } catch (e) {
+        console.error('Erro ao carregar templates:', e);
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Erro', 'Erro ao carregar templates: ' + e.message);
+        }
+      }
+    }
+    window.loadTemplate = loadTemplate;
+    
+    function loadTemplateConfirm(template) {
+      // Fechar modal de templates primeiro
+      closeLoadTemplateModal();
+      
+      // Função para carregar o template
+      const doLoadTemplate = () => {
+        try {
+          // Carregar template - fazer deep copy para evitar referências
+          if (template.rootGroup) {
+            const rootGroupCopy = JSON.parse(JSON.stringify(template.rootGroup));
+            elements = [rootGroupCopy];
+          } else {
+            elements = [];
+          }
+          
+          // Fazer deep copy de todos os objetos para evitar referências
+          if (template.documentHeader) {
+            documentHeader = JSON.parse(JSON.stringify(template.documentHeader));
+            if (!documentHeader.root) {
+              documentHeader.root = createHeaderFooterRoot();
+            }
+          } else {
+            documentHeader = { enabled: false, root: createHeaderFooterRoot() };
+          }
+          
+          if (template.documentFooter) {
+            documentFooter = JSON.parse(JSON.stringify(template.documentFooter));
+            if (!documentFooter.root) {
+              documentFooter.root = createHeaderFooterRoot();
+            }
+          } else {
+            documentFooter = { enabled: false, root: createHeaderFooterRoot() };
+          }
+          
+          documentWatermark = template.documentWatermark ? JSON.parse(JSON.stringify(template.documentWatermark)) : null;
+          documentTOC = template.documentTOC ? JSON.parse(JSON.stringify(template.documentTOC)) : null;
+          documentSecurity = template.documentSecurity ? JSON.parse(JSON.stringify(template.documentSecurity)) : null;
+          documentPageInfo = template.documentPageInfo ? JSON.parse(JSON.stringify(template.documentPageInfo)) : null;
+          documentCompress = template.documentCompress || false;
+          
+          // Atualizar UI
+          if (pageSizeSel && template.pageSize) {
+            pageSizeSel.value = template.pageSize;
+          }
+          const orientationSel = document.getElementById('orientation');
+          if (orientationSel && template.orientation) {
+            orientationSel.value = template.orientation;
+          }
+          if (template.margins && Array.isArray(template.margins)) {
+            const mL = document.getElementById('mL');
+            const mT = document.getElementById('mT');
+            const mR = document.getElementById('mR');
+            const mB = document.getElementById('mB');
+            if (mL) mL.value = template.margins[0] || 40;
+            if (mT) mT.value = template.margins[1] || 60;
+            if (mR) mR.value = template.margins[2] || 40;
+            if (mB) mB.value = template.margins[3] || 60;
+          }
+          
+          selectedElementId = null;
+          
+          // Atualizar renderização após um pequeno delay para garantir que o DOM está pronto
+          setTimeout(() => {
+            if (typeof renderAll === 'function') {
+              renderAll();
+            }
+            if (typeof renderInspector === 'function') {
+              renderInspector();
+            }
+            if (typeof renderPageInspector === 'function') {
+              renderPageInspector();
+            }
+            if (typeof updateCode === 'function') {
+              updateCode();
+            }
+            if (typeof saveState === 'function') {
+              saveState();
+            }
+            
+            if (typeof showAlertModal === 'function') {
+              showAlertModal('Sucesso', `Template "${template.name}" carregado com sucesso!`);
+            }
+          }, 100);
+        } catch (e) {
+          console.error('Erro ao carregar template:', e);
+          if (typeof showAlertModal === 'function') {
+            showAlertModal('Erro', 'Erro ao carregar template: ' + e.message);
+          }
+        }
+      };
+      
+      if (typeof showConfirmModal === 'function') {
+        showConfirmModal(
+          'Carregar Template',
+          `Carregar template "${template.name}"? Isso substituirá o conteúdo atual.`,
+          doLoadTemplate
+        );
+      } else {
+        // Se não houver modal de confirmação, carregar diretamente
+        doLoadTemplate();
+      }
+    }
+    
+    function deleteTemplate(templateName, index) {
+      if (typeof showConfirmModal === 'function') {
+        showConfirmModal(
+          'Deletar Template',
+          `Tem certeza que deseja deletar o template "${templateName}"?`,
+          () => {
+            try {
+              const stored = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+              if (stored) {
+                const templates = JSON.parse(stored);
+                templates.splice(index, 1);
+                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+                loadTemplate(); // Recarregar lista
+              }
+            } catch (e) {
+              console.error('Erro ao deletar template:', e);
+              if (typeof showAlertModal === 'function') {
+                showAlertModal('Erro', 'Erro ao deletar template: ' + e.message);
+              }
+            }
+          }
+        );
+      }
+    }
+    
+    function closeLoadTemplateModal() {
+      const modal = document.getElementById('loadTemplateModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+    window.closeLoadTemplateModal = closeLoadTemplateModal;
+    
+    const saveTemplateBtn = document.getElementById('saveTemplateBtn');
+    const loadTemplateBtn = document.getElementById('loadTemplateBtn');
+    if (saveTemplateBtn) {
+      saveTemplateBtn.addEventListener('click', saveTemplate);
+    }
+    if (loadTemplateBtn) {
+      loadTemplateBtn.addEventListener('click', loadTemplate);
+    }
+
     // copy in code tab
     if (copyBtn) copyBtn.addEventListener('click', copyCode);
 
@@ -9890,6 +10890,46 @@ function renderElementRecursive(el) {
           height="100%"
           width="100%">
         </iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Salvar Template -->
+  <div id="saveTemplateModal" class="custom-modal">
+    <div class="custom-modal-overlay" onclick="closeSaveTemplateModal()"></div>
+    <div class="custom-modal-content" style="max-width: 500px;">
+      <div class="custom-modal-header">
+        <h3>💾 Salvar Template</h3>
+      </div>
+      <div class="custom-modal-body">
+        <p style="margin-bottom: 1rem; color: #6b7280;">Digite um nome para salvar o template atual:</p>
+        <input type="text" id="saveTemplateNameInput" placeholder="Nome do template" style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 1rem;" autofocus>
+        <div id="saveTemplateError" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 0.25rem; color: #991b1b; font-size: 0.875rem;"></div>
+      </div>
+      <div class="custom-modal-footer">
+        <button class="custom-modal-btn custom-modal-btn-cancel" onclick="closeSaveTemplateModal()">Cancelar</button>
+        <button class="custom-modal-btn custom-modal-btn-confirm" onclick="confirmSaveTemplate()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Carregar Template -->
+  <div id="loadTemplateModal" class="custom-modal">
+    <div class="custom-modal-overlay" onclick="closeLoadTemplateModal()"></div>
+    <div class="custom-modal-content" style="max-width: 600px;">
+      <div class="custom-modal-header">
+        <h3>📂 Carregar Template</h3>
+      </div>
+      <div class="custom-modal-body">
+        <div id="loadTemplateList" style="max-height: 400px; overflow-y: auto;">
+          <!-- Lista de templates será preenchida aqui -->
+        </div>
+        <div id="loadTemplateEmpty" style="display: none; text-align: center; padding: 2rem; color: #6b7280;">
+          <p>Nenhum template salvo encontrado.</p>
+        </div>
+      </div>
+      <div class="custom-modal-footer">
+        <button class="custom-modal-btn custom-modal-btn-cancel" onclick="closeLoadTemplateModal()" style="width: 100%;">Fechar</button>
       </div>
     </div>
   </div>
