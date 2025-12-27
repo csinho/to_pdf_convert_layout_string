@@ -2222,12 +2222,13 @@
         return {
           ...base,
           properties: {
-            checked: false,
-            size: 12,
-            strokeWidth: 1.2,
-            color: '#000000',
-            alignment: 'center',
-            verticalAlignment: 'middle',
+            choiceType: 'checkbox',
+            choiceText: 'Texto...',
+            choiceChecked: false,
+            choiceIconPosition: 'before',
+            choiceGap: 8,
+            choiceIconSize: 12,
+            alignment: 'left',
             margin: [0, 0, 0, 10]
           }
         };
@@ -2237,12 +2238,13 @@
         return {
           ...base,
           properties: {
-            checked: false,
-            size: 12,
-            strokeWidth: 1.2,
-            color: '#000000',
-            alignment: 'center',
-            verticalAlignment: 'middle',
+            choiceType: 'radio',
+            choiceText: 'Texto...',
+            choiceChecked: false,
+            choiceIconPosition: 'before',
+            choiceGap: 8,
+            choiceIconSize: 12,
+            alignment: 'left',
             margin: [0, 0, 0, 10]
           }
         };
@@ -3560,89 +3562,92 @@ function renderElementRecursive(el) {
         }
         preview.appendChild(box);
       }
-      else if (el.type === 'checkbox') {
+      else if (el.type === 'checkbox' || el.type === 'radio') {
         const box = document.createElement('div');
-        box.className = 'preview-checkbox';
+        box.className = `preview-${el.type}`;
         const p = el.properties || {};
-        const size = Number(p.size || 12);
-        const checked = p.checked === true;
-        const color = p.color || '#000000';
-        const strokeWidth = Number(p.strokeWidth || 1.2);
+        const choiceType = p.choiceType || el.type;
+        const choiceText = p.choiceText || 'Texto...';
+        const choiceChecked = p.choiceChecked === true;
+        const choiceIconPosition = p.choiceIconPosition || 'before';
+        const choiceGap = Number(p.choiceGap || 8);
+        const choiceIconSize = Number(p.choiceIconSize || 12);
         
-        box.style.display = 'inline-flex';
+        box.style.display = 'flex';
+        box.style.flexDirection = 'row';
         box.style.alignItems = 'center';
-        box.style.justifyContent = 'center';
-        box.style.width = `${size + 4}px`;
-        box.style.height = `${size + 4}px`;
+        box.style.gap = `${choiceGap}px`;
+        box.style.justifyContent = p.alignment === 'center' ? 'center' : p.alignment === 'right' ? 'flex-end' : 'flex-start';
+        box.style.width = '100%';
+        box.style.minHeight = `${choiceIconSize + 4}px`;
         
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute('width', size + 4);
-        svg.setAttribute('height', size + 4);
-        svg.setAttribute('viewBox', `0 0 ${size + 4} ${size + 4}`);
-        
-        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        rect.setAttribute('x', '2');
-        rect.setAttribute('y', '2');
-        rect.setAttribute('width', size);
-        rect.setAttribute('height', size);
-        rect.setAttribute('fill', 'none');
-        rect.setAttribute('stroke', color);
-        rect.setAttribute('stroke-width', strokeWidth);
-        svg.appendChild(rect);
-        
-        if (checked) {
-          const check = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          check.setAttribute('d', `M ${size * 0.2 + 2} ${size * 0.5 + 2} L ${size * 0.4 + 2} ${size * 0.7 + 2} L ${size * 0.8 + 2} ${size * 0.3 + 2}`);
-          check.setAttribute('stroke', color);
-          check.setAttribute('stroke-width', strokeWidth * 1.5);
-          check.setAttribute('fill', 'none');
-          check.setAttribute('stroke-linecap', 'round');
-          check.setAttribute('stroke-linejoin', 'round');
-          svg.appendChild(check);
+        // Função para gerar SVG do ícone
+        function generateIconSVG(type, checked, size) {
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.setAttribute('width', size);
+          svg.setAttribute('height', size);
+          svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+          svg.style.flexShrink = '0';
+          
+          if (type === 'checkbox') {
+            const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rect.setAttribute('x', '1');
+            rect.setAttribute('y', '1');
+            rect.setAttribute('width', size - 2);
+            rect.setAttribute('height', size - 2);
+            rect.setAttribute('fill', 'none');
+            rect.setAttribute('stroke', '#000');
+            rect.setAttribute('stroke-width', '1');
+            svg.appendChild(rect);
+            
+            if (checked) {
+              const check = document.createElementNS("http://www.w3.org/2000/svg", "path");
+              check.setAttribute('d', `M 3 ${size * 0.5} L ${size * 0.4} ${size * 0.7} L ${size * 0.8} ${size * 0.3}`);
+              check.setAttribute('fill', 'none');
+              check.setAttribute('stroke', '#000');
+              check.setAttribute('stroke-width', '1.3');
+              check.setAttribute('stroke-linecap', 'round');
+              check.setAttribute('stroke-linejoin', 'round');
+              svg.appendChild(check);
+            }
+          } else if (type === 'radio') {
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute('cx', size / 2);
+            circle.setAttribute('cy', size / 2);
+            circle.setAttribute('r', size / 2 - 1);
+            circle.setAttribute('fill', 'none');
+            circle.setAttribute('stroke', '#000');
+            circle.setAttribute('stroke-width', '1');
+            svg.appendChild(circle);
+            
+            if (checked) {
+              const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+              dot.setAttribute('cx', size / 2);
+              dot.setAttribute('cy', size / 2);
+              dot.setAttribute('r', size / 4);
+              dot.setAttribute('fill', '#000');
+              svg.appendChild(dot);
+            }
+          }
+          
+          return svg;
         }
         
-        box.appendChild(svg);
-        preview.appendChild(box);
-      }
-      else if (el.type === 'radio') {
-        const box = document.createElement('div');
-        box.className = 'preview-radio';
-        const p = el.properties || {};
-        const size = Number(p.size || 12);
-        const checked = p.checked === true;
-        const color = p.color || '#000000';
-        const strokeWidth = Number(p.strokeWidth || 1.2);
+        const iconSVG = generateIconSVG(choiceType, choiceChecked, choiceIconSize);
+        const textDiv = document.createElement('div');
+        textDiv.textContent = choiceText;
+        textDiv.style.flex = '1';
+        textDiv.style.fontSize = '14px';
+        textDiv.style.color = '#111827';
         
-        box.style.display = 'inline-flex';
-        box.style.alignItems = 'center';
-        box.style.justifyContent = 'center';
-        box.style.width = `${size + 4}px`;
-        box.style.height = `${size + 4}px`;
-        
-        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute('width', size + 4);
-        svg.setAttribute('height', size + 4);
-        svg.setAttribute('viewBox', `0 0 ${size + 4} ${size + 4}`);
-        
-        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute('cx', (size + 4) / 2);
-        circle.setAttribute('cy', (size + 4) / 2);
-        circle.setAttribute('r', size / 2 - 1);
-        circle.setAttribute('fill', 'none');
-        circle.setAttribute('stroke', color);
-        circle.setAttribute('stroke-width', strokeWidth);
-        svg.appendChild(circle);
-        
-        if (checked) {
-          const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          dot.setAttribute('cx', (size + 4) / 2);
-          dot.setAttribute('cy', (size + 4) / 2);
-          dot.setAttribute('r', size / 4);
-          dot.setAttribute('fill', color);
-          svg.appendChild(dot);
+        if (choiceIconPosition === 'before') {
+          box.appendChild(iconSVG);
+          box.appendChild(textDiv);
+        } else {
+          box.appendChild(textDiv);
+          box.appendChild(iconSVG);
         }
         
-        box.appendChild(svg);
         preview.appendChild(box);
       }
       else if (el.type === 'fillLine') {
@@ -6447,41 +6452,41 @@ function renderElementRecursive(el) {
       const p = element.properties || {};
       return `
         <div class="inspector-field">
+          <label>Texto</label>
+          <input type="text" id="insp-choiceText" value="${escapeHtml(p.choiceText || 'Texto...')}" placeholder="Texto...">
+          <div class="smallNote">Texto que aparece ao lado do ícone</div>
+        </div>
+        <div class="inspector-field">
           <label>
-            <input type="checkbox" id="insp-checkboxChecked" ${p.checked === true ? 'checked' : ''}>
+            <input type="checkbox" id="insp-choiceChecked" ${p.choiceChecked === true ? 'checked' : ''}>
             <span style="margin-left: 0.5rem;">Marcado</span>
           </label>
         </div>
         <div class="inspector-field">
+          <label>Posição do Ícone</label>
+          <select id="insp-choiceIconPosition">
+            <option value="before" ${p.choiceIconPosition === 'before' || !p.choiceIconPosition ? 'selected' : ''}>Antes do texto</option>
+            <option value="after" ${p.choiceIconPosition === 'after' ? 'selected' : ''}>Depois do texto</option>
+          </select>
+        </div>
+        <div class="inspector-field">
           <div class="row">
             <div>
-              <label class="smallNote">Tamanho</label>
-              <input type="number" id="insp-checkboxSize" value="${p.size || 12}" min="8" max="30" step="1">
+              <label class="smallNote">Tamanho do Ícone</label>
+              <input type="number" id="insp-choiceIconSize" value="${p.choiceIconSize || 12}" min="8" max="30" step="1">
             </div>
             <div>
-              <label class="smallNote">Espessura da Linha</label>
-              <input type="number" id="insp-checkboxStrokeWidth" value="${p.strokeWidth || 1.2}" min="0.5" max="3" step="0.1">
+              <label class="smallNote">Gap (distância)</label>
+              <input type="number" id="insp-choiceGap" value="${p.choiceGap || 8}" min="0" max="30" step="1">
             </div>
           </div>
         </div>
         <div class="inspector-field">
-          <label class="smallNote">Cor</label>
-          <input type="color" id="insp-checkboxColor" value="${p.color || '#000000'}">
-        </div>
-        <div class="inspector-field">
           <label class="smallNote">Alinhamento</label>
-          <select id="insp-checkboxAlignment">
-            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
-            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+          <select id="insp-choiceAlignment">
+            <option value="left" ${p.alignment === 'left' || !p.alignment ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
             <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
-          </select>
-        </div>
-        <div class="inspector-field">
-          <label class="smallNote">Alinhamento Vertical</label>
-          <select id="insp-checkboxVerticalAlignment">
-            <option value="top" ${p.verticalAlignment === 'top' ? 'selected' : ''}>Topo</option>
-            <option value="middle" ${p.verticalAlignment === 'middle' || !p.verticalAlignment ? 'selected' : ''}>Meio</option>
-            <option value="bottom" ${p.verticalAlignment === 'bottom' ? 'selected' : ''}>Inferior</option>
           </select>
         </div>
         ${renderMarginSection(element)}
@@ -6492,41 +6497,41 @@ function renderElementRecursive(el) {
       const p = element.properties || {};
       return `
         <div class="inspector-field">
+          <label>Texto</label>
+          <input type="text" id="insp-choiceText" value="${escapeHtml(p.choiceText || 'Texto...')}" placeholder="Texto...">
+          <div class="smallNote">Texto que aparece ao lado do ícone</div>
+        </div>
+        <div class="inspector-field">
           <label>
-            <input type="checkbox" id="insp-radioChecked" ${p.checked === true ? 'checked' : ''}>
+            <input type="checkbox" id="insp-choiceChecked" ${p.choiceChecked === true ? 'checked' : ''}>
             <span style="margin-left: 0.5rem;">Marcado</span>
           </label>
         </div>
         <div class="inspector-field">
+          <label>Posição do Ícone</label>
+          <select id="insp-choiceIconPosition">
+            <option value="before" ${p.choiceIconPosition === 'before' || !p.choiceIconPosition ? 'selected' : ''}>Antes do texto</option>
+            <option value="after" ${p.choiceIconPosition === 'after' ? 'selected' : ''}>Depois do texto</option>
+          </select>
+        </div>
+        <div class="inspector-field">
           <div class="row">
             <div>
-              <label class="smallNote">Tamanho</label>
-              <input type="number" id="insp-radioSize" value="${p.size || 12}" min="8" max="30" step="1">
+              <label class="smallNote">Tamanho do Ícone</label>
+              <input type="number" id="insp-choiceIconSize" value="${p.choiceIconSize || 12}" min="8" max="30" step="1">
             </div>
             <div>
-              <label class="smallNote">Espessura da Linha</label>
-              <input type="number" id="insp-radioStrokeWidth" value="${p.strokeWidth || 1.2}" min="0.5" max="3" step="0.1">
+              <label class="smallNote">Gap (distância)</label>
+              <input type="number" id="insp-choiceGap" value="${p.choiceGap || 8}" min="0" max="30" step="1">
             </div>
           </div>
         </div>
         <div class="inspector-field">
-          <label class="smallNote">Cor</label>
-          <input type="color" id="insp-radioColor" value="${p.color || '#000000'}">
-        </div>
-        <div class="inspector-field">
           <label class="smallNote">Alinhamento</label>
-          <select id="insp-radioAlignment">
-            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
-            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+          <select id="insp-choiceAlignment">
+            <option value="left" ${p.alignment === 'left' || !p.alignment ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
             <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
-          </select>
-        </div>
-        <div class="inspector-field">
-          <label class="smallNote">Alinhamento Vertical</label>
-          <select id="insp-radioVerticalAlignment">
-            <option value="top" ${p.verticalAlignment === 'top' ? 'selected' : ''}>Topo</option>
-            <option value="middle" ${p.verticalAlignment === 'middle' || !p.verticalAlignment ? 'selected' : ''}>Meio</option>
-            <option value="bottom" ${p.verticalAlignment === 'bottom' ? 'selected' : ''}>Inferior</option>
           </select>
         </div>
         ${renderMarginSection(element)}
@@ -9098,124 +9103,67 @@ function renderElementRecursive(el) {
           break;
           
         case 'checkbox':
-          const checkboxChecked = document.getElementById('insp-checkboxChecked');
-          const checkboxSizeInput = document.getElementById('insp-checkboxSize');
-          const checkboxStrokeWidthInput = document.getElementById('insp-checkboxStrokeWidth');
-          const checkboxColorInput = document.getElementById('insp-checkboxColor');
-          const checkboxAlignmentSelect = document.getElementById('insp-checkboxAlignment');
-          const checkboxVerticalAlignmentSelect = document.getElementById('insp-checkboxVerticalAlignment');
-          
-          if (checkboxChecked) {
-            checkboxChecked.addEventListener('change', () => {
-              p.checked = checkboxChecked.checked;
-              updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
-              }, 300);
-            });
-          }
-          
-          if (checkboxSizeInput) {
-            checkboxSizeInput.addEventListener('input', () => {
-              p.size = parseInt(checkboxSizeInput.value) || 12;
-              updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
-              }, 300);
-            });
-          }
-          
-          if (checkboxStrokeWidthInput) {
-            checkboxStrokeWidthInput.addEventListener('input', () => {
-              p.strokeWidth = parseFloat(checkboxStrokeWidthInput.value) || 1.2;
-              updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
-              }, 300);
-            });
-          }
-          
-          if (checkboxColorInput) {
-            checkboxColorInput.addEventListener('input', () => {
-              p.color = checkboxColorInput.value;
-              updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
-              }, 300);
-            });
-          }
-          
-          if (checkboxAlignmentSelect) {
-            checkboxAlignmentSelect.addEventListener('change', () => {
-              p.alignment = checkboxAlignmentSelect.value;
-              updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
-              }, 300);
-            });
-          }
-          
-          if (checkboxVerticalAlignmentSelect) {
-            checkboxVerticalAlignmentSelect.addEventListener('change', () => {
-              p.verticalAlignment = checkboxVerticalAlignmentSelect.value;
-              updateWithoutLosingFocus(() => {
-                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
-              }, 300);
-            });
-          }
-          break;
-          
         case 'radio':
-          const radioChecked = document.getElementById('insp-radioChecked');
-          const radioSizeInput = document.getElementById('insp-radioSize');
-          const radioStrokeWidthInput = document.getElementById('insp-radioStrokeWidth');
-          const radioColorInput = document.getElementById('insp-radioColor');
-          const radioAlignmentSelect = document.getElementById('insp-radioAlignment');
-          const radioVerticalAlignmentSelect = document.getElementById('insp-radioVerticalAlignment');
+          const choiceTextInput = document.getElementById('insp-choiceText');
+          const choiceChecked = document.getElementById('insp-choiceChecked');
+          const choiceIconPositionSelect = document.getElementById('insp-choiceIconPosition');
+          const choiceIconSizeInput = document.getElementById('insp-choiceIconSize');
+          const choiceGapInput = document.getElementById('insp-choiceGap');
+          const choiceAlignmentSelect = document.getElementById('insp-choiceAlignment');
           
-          if (radioChecked) {
-            radioChecked.addEventListener('change', () => {
-              p.checked = radioChecked.checked;
+          // Garantir que choiceType está definido
+          if (!p.choiceType) {
+            p.choiceType = element.type;
+          }
+          
+          if (choiceTextInput) {
+            choiceTextInput.addEventListener('input', () => {
+              p.choiceText = choiceTextInput.value;
               updateWithoutLosingFocus(() => {
                 if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           
-          if (radioSizeInput) {
-            radioSizeInput.addEventListener('input', () => {
-              p.size = parseInt(radioSizeInput.value) || 12;
+          if (choiceChecked) {
+            choiceChecked.addEventListener('change', () => {
+              p.choiceChecked = choiceChecked.checked;
               updateWithoutLosingFocus(() => {
                 if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           
-          if (radioStrokeWidthInput) {
-            radioStrokeWidthInput.addEventListener('input', () => {
-              p.strokeWidth = parseFloat(radioStrokeWidthInput.value) || 1.2;
+          if (choiceIconPositionSelect) {
+            choiceIconPositionSelect.addEventListener('change', () => {
+              p.choiceIconPosition = choiceIconPositionSelect.value;
               updateWithoutLosingFocus(() => {
                 if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           
-          if (radioColorInput) {
-            radioColorInput.addEventListener('input', () => {
-              p.color = radioColorInput.value;
+          if (choiceIconSizeInput) {
+            choiceIconSizeInput.addEventListener('input', () => {
+              p.choiceIconSize = parseInt(choiceIconSizeInput.value) || 12;
               updateWithoutLosingFocus(() => {
                 if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           
-          if (radioAlignmentSelect) {
-            radioAlignmentSelect.addEventListener('change', () => {
-              p.alignment = radioAlignmentSelect.value;
+          if (choiceGapInput) {
+            choiceGapInput.addEventListener('input', () => {
+              p.choiceGap = parseInt(choiceGapInput.value) || 8;
               updateWithoutLosingFocus(() => {
                 if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
             });
           }
           
-          if (radioVerticalAlignmentSelect) {
-            radioVerticalAlignmentSelect.addEventListener('change', () => {
-              p.verticalAlignment = radioVerticalAlignmentSelect.value;
+          if (choiceAlignmentSelect) {
+            choiceAlignmentSelect.addEventListener('change', () => {
+              p.alignment = choiceAlignmentSelect.value;
               updateWithoutLosingFocus(() => {
                 if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
               }, 300);
@@ -9584,34 +9532,70 @@ function renderElementRecursive(el) {
         return stampObj;
       }
 
-      if (el.type === 'checkbox') {
-        const checkboxObj = {
-          checkbox: true,
-          checked: p.checked === true,
-          size: Number(p.size || 12),
-          strokeWidth: Number(p.strokeWidth || 1.2),
-          color: p.color || '#000000',
-          alignment: p.alignment || 'center',
-          verticalAlignment: p.verticalAlignment || 'middle',
-          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        const choiceType = p.choiceType || el.type;
+        const choiceText = p.choiceText || 'Texto...';
+        const choiceChecked = p.choiceChecked === true;
+        const choiceIconPosition = p.choiceIconPosition || 'before';
+        const choiceGap = Number(p.choiceGap || 8);
+        const choiceIconSize = Number(p.choiceIconSize || 12);
+        const alignment = p.alignment || 'left';
+        const margin = Array.isArray(p.margin) ? p.margin : [0, 0, 0, 10];
+        
+        // Função para gerar SVG do ícone
+        function generateChoiceSVG(type, checked, size) {
+          if (type === 'checkbox') {
+            if (checked) {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="1" y="1" width="${size - 2}" height="${size - 2}" fill="none" stroke="#000" stroke-width="1"/><path d="M 3 ${size * 0.5} L ${size * 0.4} ${size * 0.7} L ${size * 0.8} ${size * 0.3}" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            } else {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="1" y="1" width="${size - 2}" height="${size - 2}" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+            }
+          } else if (type === 'radio') {
+            if (checked) {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="none" stroke="#000" stroke-width="1"/><circle cx="${size / 2}" cy="${size / 2}" r="${size / 4}" fill="#000"/></svg>`;
+            } else {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+            }
+          }
+          return '';
+        }
+        
+        const svgString = generateChoiceSVG(choiceType, choiceChecked, choiceIconSize);
+        
+        // Montar células da tabela
+        const iconCell = {
+          svg: svgString,
+          width: choiceIconSize,
+          height: choiceIconSize,
+          alignment: 'center',
+          margin: choiceIconPosition === 'before' ? [0, 0, choiceGap, 0] : [choiceGap, 0, 0, 0]
         };
         
-        return checkboxObj;
-      }
-
-      if (el.type === 'radio') {
-        const radioObj = {
-          radio: true,
-          checked: p.checked === true,
-          size: Number(p.size || 12),
-          strokeWidth: Number(p.strokeWidth || 1.2),
-          color: p.color || '#000000',
-          alignment: p.alignment || 'center',
-          verticalAlignment: p.verticalAlignment || 'middle',
-          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        const textCell = {
+          text: choiceText,
+          fontSize: 10,
+          margin: [0, 0, 0, 0]
         };
         
-        return radioObj;
+        // Definir larguras e ordem das colunas baseado na posição do ícone
+        let widths, body;
+        if (choiceIconPosition === 'before') {
+          widths = [choiceIconSize, '*'];
+          body = [[iconCell, textCell]];
+        } else {
+          widths = ['*', choiceIconSize];
+          body = [[textCell, iconCell]];
+        }
+        
+        return {
+          alignment: alignment,
+          margin: margin,
+          table: {
+            widths: widths,
+            body: body
+          },
+          layout: 'noBorders'
+        };
       }
 
       if (el.type === 'fillLine') {
