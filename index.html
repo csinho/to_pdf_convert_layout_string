@@ -11,6 +11,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/vfs_fonts.js"></script>
   <!-- JsBarcode for barcode generation -->
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <!-- Chart.js for chart generation -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   
   <style>
     * {
@@ -1595,6 +1597,26 @@
             <div class="element-icon icon-barcode">📊</div>
             <span>Barcode</span>
           </div>
+          <div class="element-btn" draggable="true" ondragstart="startDrag('stamp', event)">
+            <div class="element-icon icon-stamp">🏷</div>
+            <span>Carimbo / Selo</span>
+          </div>
+          <div class="element-btn" draggable="true" ondragstart="startDrag('checkbox', event)">
+            <div class="element-icon icon-checkbox">☑</div>
+            <span>Checkbox</span>
+          </div>
+          <div class="element-btn" draggable="true" ondragstart="startDrag('radio', event)">
+            <div class="element-icon icon-radio">◉</div>
+            <span>Radio</span>
+          </div>
+          <div class="element-btn" draggable="true" ondragstart="startDrag('fillLine', event)">
+            <div class="element-icon icon-line">━</div>
+            <span>Linha (preenchimento)</span>
+          </div>
+          <div class="element-btn" draggable="true" ondragstart="startDrag('chart', event)">
+            <div class="element-icon icon-chart">📊</div>
+            <span>Gráfico (Chart.js)</span>
+          </div>
         </div>
 
         <div class="info-box">
@@ -2176,6 +2198,96 @@
             width: 100,
             height: 100,
             color: '#000000',
+            alignment: 'center',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'stamp') {
+        return {
+          ...base,
+          properties: {
+            sourceType: 'image',
+            value: '',
+            fit: [120, 120],
+            alignment: 'center',
+            margin: [0, 0, 0, 10],
+            opacity: 1
+          }
+        };
+      }
+
+      if (type === 'checkbox') {
+        return {
+          ...base,
+          properties: {
+            checked: false,
+            size: 12,
+            strokeWidth: 1.2,
+            color: '#000000',
+            alignment: 'center',
+            verticalAlignment: 'middle',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'radio') {
+        return {
+          ...base,
+          properties: {
+            checked: false,
+            size: 12,
+            strokeWidth: 1.2,
+            color: '#000000',
+            alignment: 'center',
+            verticalAlignment: 'middle',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'fillLine') {
+        return {
+          ...base,
+          properties: {
+            lineWidth: 200,
+            thickness: 0.8,
+            color: '#000000',
+            alignment: 'left',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'chart') {
+        return {
+          ...base,
+          properties: {
+            chartType: 'bar',
+            chartWidth: 400,
+            chartHeight: 200,
+            chartFit: [400, 200],
+            chartBackgroundColor: '#FFFFFF',
+            chartDevicePixelRatio: 2,
+            chartData: {
+              labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+              datasets: [{
+                label: 'Dataset 1',
+                data: [10, 20, 30, 40, 50],
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+              }]
+            },
+            chartOptions: {
+              responsive: false,
+              animation: { duration: 0 },
+              scales: {
+                y: { beginAtZero: true }
+              }
+            },
             alignment: 'center',
             margin: [0, 0, 0, 10]
           }
@@ -3404,6 +3516,210 @@ function renderElementRecursive(el) {
         
         preview.appendChild(box);
       }
+      else if (el.type === 'stamp') {
+        const box = document.createElement('div');
+        box.className = 'preview-stamp';
+        const p = el.properties || {};
+        const fit = Array.isArray(p.fit) ? p.fit : [p.fit || 120, p.fit || 120];
+        box.style.width = `${fit[0]}px`;
+        box.style.height = `${fit[1]}px`;
+        box.style.border = '1px solid #d1d5db';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        box.style.background = '#f9fafb';
+        box.style.opacity = p.opacity !== undefined ? p.opacity : 1;
+        
+        if (p.sourceType === 'image' && p.value) {
+          const img = document.createElement('img');
+          img.src = p.value;
+          img.style.maxWidth = '100%';
+          img.style.maxHeight = '100%';
+          img.style.objectFit = 'contain';
+          img.onerror = () => {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Erro ao carregar imagem</div>';
+          };
+          box.appendChild(img);
+        } else if (p.sourceType === 'svg' && p.value) {
+          try {
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(p.value, 'image/svg+xml');
+            const svgElement = svgDoc.documentElement;
+            if (svgElement && svgElement.tagName === 'svg') {
+              svgElement.setAttribute('width', fit[0]);
+              svgElement.setAttribute('height', fit[1]);
+              box.appendChild(svgElement);
+            } else {
+              box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">Carimbo / Selo</div>';
+            }
+          } catch (e) {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Erro no SVG</div>';
+          }
+        } else {
+          box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">Carimbo / Selo</div>';
+        }
+        preview.appendChild(box);
+      }
+      else if (el.type === 'checkbox') {
+        const box = document.createElement('div');
+        box.className = 'preview-checkbox';
+        const p = el.properties || {};
+        const size = Number(p.size || 12);
+        const checked = p.checked === true;
+        const color = p.color || '#000000';
+        const strokeWidth = Number(p.strokeWidth || 1.2);
+        
+        box.style.display = 'inline-flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        box.style.width = `${size + 4}px`;
+        box.style.height = `${size + 4}px`;
+        
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute('width', size + 4);
+        svg.setAttribute('height', size + 4);
+        svg.setAttribute('viewBox', `0 0 ${size + 4} ${size + 4}`);
+        
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute('x', '2');
+        rect.setAttribute('y', '2');
+        rect.setAttribute('width', size);
+        rect.setAttribute('height', size);
+        rect.setAttribute('fill', 'none');
+        rect.setAttribute('stroke', color);
+        rect.setAttribute('stroke-width', strokeWidth);
+        svg.appendChild(rect);
+        
+        if (checked) {
+          const check = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          check.setAttribute('d', `M ${size * 0.2 + 2} ${size * 0.5 + 2} L ${size * 0.4 + 2} ${size * 0.7 + 2} L ${size * 0.8 + 2} ${size * 0.3 + 2}`);
+          check.setAttribute('stroke', color);
+          check.setAttribute('stroke-width', strokeWidth * 1.5);
+          check.setAttribute('fill', 'none');
+          check.setAttribute('stroke-linecap', 'round');
+          check.setAttribute('stroke-linejoin', 'round');
+          svg.appendChild(check);
+        }
+        
+        box.appendChild(svg);
+        preview.appendChild(box);
+      }
+      else if (el.type === 'radio') {
+        const box = document.createElement('div');
+        box.className = 'preview-radio';
+        const p = el.properties || {};
+        const size = Number(p.size || 12);
+        const checked = p.checked === true;
+        const color = p.color || '#000000';
+        const strokeWidth = Number(p.strokeWidth || 1.2);
+        
+        box.style.display = 'inline-flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        box.style.width = `${size + 4}px`;
+        box.style.height = `${size + 4}px`;
+        
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute('width', size + 4);
+        svg.setAttribute('height', size + 4);
+        svg.setAttribute('viewBox', `0 0 ${size + 4} ${size + 4}`);
+        
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute('cx', (size + 4) / 2);
+        circle.setAttribute('cy', (size + 4) / 2);
+        circle.setAttribute('r', size / 2 - 1);
+        circle.setAttribute('fill', 'none');
+        circle.setAttribute('stroke', color);
+        circle.setAttribute('stroke-width', strokeWidth);
+        svg.appendChild(circle);
+        
+        if (checked) {
+          const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          dot.setAttribute('cx', (size + 4) / 2);
+          dot.setAttribute('cy', (size + 4) / 2);
+          dot.setAttribute('r', size / 4);
+          dot.setAttribute('fill', color);
+          svg.appendChild(dot);
+        }
+        
+        box.appendChild(svg);
+        preview.appendChild(box);
+      }
+      else if (el.type === 'fillLine') {
+        const box = document.createElement('div');
+        box.className = 'preview-fillline';
+        const p = el.properties || {};
+        const lineWidth = Number(p.lineWidth || 200);
+        const thickness = Number(p.thickness || 0.8);
+        const color = p.color || '#000000';
+        
+        box.style.width = `${lineWidth}px`;
+        box.style.height = `${thickness + 4}px`;
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = p.alignment === 'center' ? 'center' : p.alignment === 'right' ? 'flex-end' : 'flex-start';
+        
+        const line = document.createElement('div');
+        line.style.width = `${lineWidth}px`;
+        line.style.height = `${thickness}px`;
+        line.style.backgroundColor = color;
+        line.style.borderRadius = '1px';
+        box.appendChild(line);
+        preview.appendChild(box);
+      }
+      else if (el.type === 'chart') {
+        const box = document.createElement('div');
+        box.className = 'preview-chart';
+        const p = el.properties || {};
+        const width = Number(p.chartWidth || 400);
+        const height = Number(p.chartHeight || 200);
+        
+        box.style.width = `${width}px`;
+        box.style.height = `${height}px`;
+        box.style.border = '1px solid #d1d5db';
+        box.style.borderRadius = '0.375rem';
+        box.style.background = p.chartBackgroundColor || '#FFFFFF';
+        box.style.position = 'relative';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.maxWidth = '100%';
+        canvas.style.maxHeight = '100%';
+        box.appendChild(canvas);
+        
+        // Renderizar gráfico usando Chart.js se disponível
+        if (typeof Chart !== 'undefined') {
+          try {
+            const ctx = canvas.getContext('2d');
+            const chartData = p.chartData || { labels: [], datasets: [] };
+            const chartOptions = {
+              ...(p.chartOptions || {}),
+              responsive: false,
+              animation: { duration: 0 },
+              maintainAspectRatio: false
+            };
+            
+            const chart = new Chart(ctx, {
+              type: p.chartType || 'bar',
+              data: chartData,
+              options: chartOptions
+            });
+            
+            // Armazenar referência do chart para destruir depois
+            box._chart = chart;
+          } catch (e) {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Erro ao renderizar gráfico</div>';
+          }
+        } else {
+          box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">Chart.js não carregado</div>';
+        }
+        
+        preview.appendChild(box);
+      }
       else {
         preview.textContent = elementLabel(el);
       }
@@ -4559,6 +4875,19 @@ function renderElementRecursive(el) {
             isFirst = childIndex === 0;
             isLast = childIndex === children.length - 1;
             showReorder = true;
+            
+            // Adicionar campo para editar verticalAlignment da célula
+            html += `
+              <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+                <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Alinhamento Vertical da Célula</label>
+                <select id="insp-cellVerticalAlignment" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem;">
+                  <option value="top" ${cell.verticalAlignment === 'top' ? 'selected' : ''}>Topo</option>
+                  <option value="middle" ${cell.verticalAlignment === 'middle' || !cell.verticalAlignment ? 'selected' : ''}>Meio</option>
+                  <option value="bottom" ${cell.verticalAlignment === 'bottom' ? 'selected' : ''}>Inferior</option>
+                </select>
+                <div class="smallNote" style="margin-top: 0.5rem;">Alinhamento vertical do conteúdo dentro desta célula</div>
+              </div>
+            `;
           }
         }
         
@@ -4743,6 +5072,21 @@ function renderElementRecursive(el) {
           break;
         case 'barcode':
           html += renderInspectorBarcode(element);
+          break;
+        case 'stamp':
+          html += renderInspectorStamp(element);
+          break;
+        case 'checkbox':
+          html += renderInspectorCheckbox(element);
+          break;
+        case 'radio':
+          html += renderInspectorRadio(element);
+          break;
+        case 'fillLine':
+          html += renderInspectorFillLine(element);
+          break;
+        case 'chart':
+          html += renderInspectorChart(element);
           break;
         case 'group':
           html += renderInspectorGroup(element);
@@ -6053,6 +6397,242 @@ function renderElementRecursive(el) {
       `;
     }
 
+    function renderInspectorStamp(element) {
+      const p = element.properties || {};
+      const fit = Array.isArray(p.fit) ? p.fit : [p.fit || 120, p.fit || 120];
+      return `
+        <div class="inspector-field">
+          <label>Tipo de Fonte</label>
+          <select id="insp-stampSourceType">
+            <option value="image" ${p.sourceType === 'image' || !p.sourceType ? 'selected' : ''}>Imagem</option>
+            <option value="svg" ${p.sourceType === 'svg' ? 'selected' : ''}>SVG</option>
+          </select>
+        </div>
+        <div class="inspector-field" id="insp-stampValueField">
+          <label id="insp-stampValueLabel">${p.sourceType === 'svg' ? 'Código SVG' : 'URL ou DataURL'}</label>
+          ${p.sourceType === 'svg' ? 
+            `<textarea id="insp-stampValue" rows="6" placeholder="<svg>...</svg>">${escapeHtml(p.value || '')}</textarea>` :
+            `<input type="text" id="insp-stampValue" value="${escapeHtml(p.value || '')}" placeholder="https://exemplo.com/imagem.png ou data:image/...">`
+          }
+          <div class="smallNote">${p.sourceType === 'svg' ? 'Cole o código SVG completo' : 'URL da imagem (http/https) ou dataURL (data:image/...)'}</div>
+        </div>
+        <div class="inspector-field">
+          <label>Fit (Largura x Altura)</label>
+          <div class="row">
+            <div>
+              <input type="number" id="insp-stampFitW" value="${fit[0]}" min="10" max="500">
+            </div>
+            <div>
+              <input type="number" id="insp-stampFitH" value="${fit[1]}" min="10" max="500">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-stampAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Opacidade</label>
+          <input type="number" id="insp-stampOpacity" value="${p.opacity !== undefined ? p.opacity : 1}" min="0" max="1" step="0.1">
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorCheckbox(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>
+            <input type="checkbox" id="insp-checkboxChecked" ${p.checked === true ? 'checked' : ''}>
+            <span style="margin-left: 0.5rem;">Marcado</span>
+          </label>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tamanho</label>
+              <input type="number" id="insp-checkboxSize" value="${p.size || 12}" min="8" max="30" step="1">
+            </div>
+            <div>
+              <label class="smallNote">Espessura da Linha</label>
+              <input type="number" id="insp-checkboxStrokeWidth" value="${p.strokeWidth || 1.2}" min="0.5" max="3" step="0.1">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Cor</label>
+          <input type="color" id="insp-checkboxColor" value="${p.color || '#000000'}">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-checkboxAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento Vertical</label>
+          <select id="insp-checkboxVerticalAlignment">
+            <option value="top" ${p.verticalAlignment === 'top' ? 'selected' : ''}>Topo</option>
+            <option value="middle" ${p.verticalAlignment === 'middle' || !p.verticalAlignment ? 'selected' : ''}>Meio</option>
+            <option value="bottom" ${p.verticalAlignment === 'bottom' ? 'selected' : ''}>Inferior</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorRadio(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>
+            <input type="checkbox" id="insp-radioChecked" ${p.checked === true ? 'checked' : ''}>
+            <span style="margin-left: 0.5rem;">Marcado</span>
+          </label>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tamanho</label>
+              <input type="number" id="insp-radioSize" value="${p.size || 12}" min="8" max="30" step="1">
+            </div>
+            <div>
+              <label class="smallNote">Espessura da Linha</label>
+              <input type="number" id="insp-radioStrokeWidth" value="${p.strokeWidth || 1.2}" min="0.5" max="3" step="0.1">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Cor</label>
+          <input type="color" id="insp-radioColor" value="${p.color || '#000000'}">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-radioAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento Vertical</label>
+          <select id="insp-radioVerticalAlignment">
+            <option value="top" ${p.verticalAlignment === 'top' ? 'selected' : ''}>Topo</option>
+            <option value="middle" ${p.verticalAlignment === 'middle' || !p.verticalAlignment ? 'selected' : ''}>Meio</option>
+            <option value="bottom" ${p.verticalAlignment === 'bottom' ? 'selected' : ''}>Inferior</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorFillLine(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label class="smallNote">Largura da Linha</label>
+          <input type="number" id="insp-fillLineWidth" value="${p.lineWidth || 200}" min="50" max="800" step="10">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Espessura</label>
+          <input type="number" id="insp-fillLineThickness" value="${p.thickness || 0.8}" min="0.5" max="5" step="0.1">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Cor</label>
+          <input type="color" id="insp-fillLineColor" value="${p.color || '#000000'}">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-fillLineAlignment">
+            <option value="left" ${p.alignment === 'left' || !p.alignment ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorChart(element) {
+      const p = element.properties || {};
+      const fit = Array.isArray(p.chartFit) ? p.chartFit : [p.chartFit || 400, p.chartFit || 200];
+      return `
+        <div class="inspector-field">
+          <label>Tipo de Gráfico</label>
+          <select id="insp-chartType">
+            <option value="bar" ${p.chartType === 'bar' || !p.chartType ? 'selected' : ''}>Barra</option>
+            <option value="line" ${p.chartType === 'line' ? 'selected' : ''}>Linha</option>
+            <option value="pie" ${p.chartType === 'pie' ? 'selected' : ''}>Pizza</option>
+            <option value="doughnut" ${p.chartType === 'doughnut' ? 'selected' : ''}>Rosca</option>
+            <option value="radar" ${p.chartType === 'radar' ? 'selected' : ''}>Radar</option>
+            <option value="polarArea" ${p.chartType === 'polarArea' ? 'selected' : ''}>Área Polar</option>
+            <option value="scatter" ${p.chartType === 'scatter' ? 'selected' : ''}>Dispersão</option>
+            <option value="bubble" ${p.chartType === 'bubble' ? 'selected' : ''}>Bolha</option>
+            <option value="mixed" ${p.chartType === 'mixed' ? 'selected' : ''}>Misto</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label>Tamanho do Gráfico</label>
+          <div class="row">
+            <div>
+              <label class="smallNote">Largura</label>
+              <input type="number" id="insp-chartWidth" value="${p.chartWidth || 400}" min="200" max="800" step="10">
+            </div>
+            <div>
+              <label class="smallNote">Altura</label>
+              <input type="number" id="insp-chartHeight" value="${p.chartHeight || 200}" min="100" max="600" step="10">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label>Fit (Largura x Altura)</label>
+          <div class="row">
+            <div>
+              <input type="number" id="insp-chartFitW" value="${fit[0]}" min="100" max="800" step="10">
+            </div>
+            <div>
+              <input type="number" id="insp-chartFitH" value="${fit[1]}" min="50" max="600" step="10">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Cor de Fundo</label>
+          <input type="color" id="insp-chartBackgroundColor" value="${p.chartBackgroundColor || '#FFFFFF'}">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Device Pixel Ratio</label>
+          <input type="number" id="insp-chartDevicePixelRatio" value="${p.chartDevicePixelRatio || 2}" min="1" max="4" step="1">
+          <div class="smallNote">Valor maior = melhor qualidade (2 é recomendado)</div>
+        </div>
+        <div class="inspector-field">
+          <label>Dados do Gráfico (JSON)</label>
+          <textarea id="insp-chartData" rows="8" placeholder='{"labels": ["Jan", "Feb"], "datasets": [...]}'>${escapeHtml(JSON.stringify(p.chartData || { labels: [], datasets: [] }, null, 2))}</textarea>
+          <div class="smallNote">Formato JSON do Chart.js. Deve conter "labels" e "datasets"</div>
+        </div>
+        <div class="inspector-field">
+          <label>Opções do Gráfico (JSON)</label>
+          <textarea id="insp-chartOptions" rows="8" placeholder='{"responsive": false, "animation": {"duration": 0}, ...}'>${escapeHtml(JSON.stringify(p.chartOptions || { responsive: false, animation: { duration: 0 } }, null, 2))}</textarea>
+          <div class="smallNote">Formato JSON do Chart.js. animation.duration deve ser 0 para export correto</div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-chartAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
     function renderInspectorGroup(element) {
       const p = element.properties || {};
       return `
@@ -6245,6 +6825,24 @@ function renderElementRecursive(el) {
               } else if (typeof render === 'function') {
                 render();
               }
+            }, 300);
+          });
+        }
+      }
+      
+      // Adicionar listener para verticalAlignment de célula de tabela
+      const cellVerticalAlignmentSelect = document.getElementById('insp-cellVerticalAlignment');
+      if (cellVerticalAlignmentSelect) {
+        const nodeWithParent = findNodeWithParent(element.id);
+        if (nodeWithParent && nodeWithParent.parent && nodeWithParent.ctx && nodeWithParent.ctx.kind === 'tableCell') {
+          const ctx = nodeWithParent.ctx;
+          const table = nodeWithParent.parent;
+          const cell = table.properties.body[ctx.row][ctx.col];
+          
+          cellVerticalAlignmentSelect.addEventListener('change', () => {
+            cell.verticalAlignment = cellVerticalAlignmentSelect.value;
+            updateWithoutLosingFocus(() => {
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
             }, 300);
           });
         }
@@ -8411,6 +9009,381 @@ function renderElementRecursive(el) {
             });
           }
           break;
+          
+        case 'stamp':
+          const stampSourceTypeSelect = document.getElementById('insp-stampSourceType');
+          const stampValueInput = document.getElementById('insp-stampValue');
+          const stampValueField = document.getElementById('insp-stampValueField');
+          const stampValueLabel = document.getElementById('insp-stampValueLabel');
+          const stampFitWInput = document.getElementById('insp-stampFitW');
+          const stampFitHInput = document.getElementById('insp-stampFitH');
+          const stampAlignmentSelect = document.getElementById('insp-stampAlignment');
+          const stampOpacityInput = document.getElementById('insp-stampOpacity');
+          
+          if (stampSourceTypeSelect) {
+            stampSourceTypeSelect.addEventListener('change', () => {
+              p.sourceType = stampSourceTypeSelect.value;
+              // Atualizar campo de valor baseado no tipo
+              if (stampValueField && stampValueLabel) {
+                if (p.sourceType === 'svg') {
+                  stampValueLabel.textContent = 'Código SVG';
+                  stampValueField.innerHTML = `<textarea id="insp-stampValue" rows="6" placeholder="<svg>...</svg>">${escapeHtml(p.value || '')}</textarea>`;
+                } else {
+                  stampValueLabel.textContent = 'URL ou DataURL';
+                  stampValueField.innerHTML = `<input type="text" id="insp-stampValue" value="${escapeHtml(p.value || '')}" placeholder="https://exemplo.com/imagem.png ou data:image/...">`;
+                }
+                // Re-attach listener
+                const newInput = document.getElementById('insp-stampValue');
+                if (newInput) {
+                  newInput.addEventListener('input', () => {
+                    p.value = newInput.value;
+                    updateWithoutLosingFocus(() => {
+                      if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+                    }, 300);
+                  });
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (stampValueInput) {
+            stampValueInput.addEventListener('input', () => {
+              p.value = stampValueInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (stampFitWInput) {
+            stampFitWInput.addEventListener('input', () => {
+              if (!Array.isArray(p.fit)) p.fit = [120, 120];
+              p.fit[0] = parseInt(stampFitWInput.value) || 120;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (stampFitHInput) {
+            stampFitHInput.addEventListener('input', () => {
+              if (!Array.isArray(p.fit)) p.fit = [120, 120];
+              p.fit[1] = parseInt(stampFitHInput.value) || 120;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (stampAlignmentSelect) {
+            stampAlignmentSelect.addEventListener('change', () => {
+              p.alignment = stampAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (stampOpacityInput) {
+            stampOpacityInput.addEventListener('input', () => {
+              p.opacity = parseFloat(stampOpacityInput.value) || 1;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+          
+        case 'checkbox':
+          const checkboxChecked = document.getElementById('insp-checkboxChecked');
+          const checkboxSizeInput = document.getElementById('insp-checkboxSize');
+          const checkboxStrokeWidthInput = document.getElementById('insp-checkboxStrokeWidth');
+          const checkboxColorInput = document.getElementById('insp-checkboxColor');
+          const checkboxAlignmentSelect = document.getElementById('insp-checkboxAlignment');
+          const checkboxVerticalAlignmentSelect = document.getElementById('insp-checkboxVerticalAlignment');
+          
+          if (checkboxChecked) {
+            checkboxChecked.addEventListener('change', () => {
+              p.checked = checkboxChecked.checked;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (checkboxSizeInput) {
+            checkboxSizeInput.addEventListener('input', () => {
+              p.size = parseInt(checkboxSizeInput.value) || 12;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (checkboxStrokeWidthInput) {
+            checkboxStrokeWidthInput.addEventListener('input', () => {
+              p.strokeWidth = parseFloat(checkboxStrokeWidthInput.value) || 1.2;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (checkboxColorInput) {
+            checkboxColorInput.addEventListener('input', () => {
+              p.color = checkboxColorInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (checkboxAlignmentSelect) {
+            checkboxAlignmentSelect.addEventListener('change', () => {
+              p.alignment = checkboxAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (checkboxVerticalAlignmentSelect) {
+            checkboxVerticalAlignmentSelect.addEventListener('change', () => {
+              p.verticalAlignment = checkboxVerticalAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+          
+        case 'radio':
+          const radioChecked = document.getElementById('insp-radioChecked');
+          const radioSizeInput = document.getElementById('insp-radioSize');
+          const radioStrokeWidthInput = document.getElementById('insp-radioStrokeWidth');
+          const radioColorInput = document.getElementById('insp-radioColor');
+          const radioAlignmentSelect = document.getElementById('insp-radioAlignment');
+          const radioVerticalAlignmentSelect = document.getElementById('insp-radioVerticalAlignment');
+          
+          if (radioChecked) {
+            radioChecked.addEventListener('change', () => {
+              p.checked = radioChecked.checked;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (radioSizeInput) {
+            radioSizeInput.addEventListener('input', () => {
+              p.size = parseInt(radioSizeInput.value) || 12;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (radioStrokeWidthInput) {
+            radioStrokeWidthInput.addEventListener('input', () => {
+              p.strokeWidth = parseFloat(radioStrokeWidthInput.value) || 1.2;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (radioColorInput) {
+            radioColorInput.addEventListener('input', () => {
+              p.color = radioColorInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (radioAlignmentSelect) {
+            radioAlignmentSelect.addEventListener('change', () => {
+              p.alignment = radioAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (radioVerticalAlignmentSelect) {
+            radioVerticalAlignmentSelect.addEventListener('change', () => {
+              p.verticalAlignment = radioVerticalAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+          
+        case 'fillLine':
+          const fillLineWidthInput = document.getElementById('insp-fillLineWidth');
+          const fillLineThicknessInput = document.getElementById('insp-fillLineThickness');
+          const fillLineColorInput = document.getElementById('insp-fillLineColor');
+          const fillLineAlignmentSelect = document.getElementById('insp-fillLineAlignment');
+          
+          if (fillLineWidthInput) {
+            fillLineWidthInput.addEventListener('input', () => {
+              p.lineWidth = parseInt(fillLineWidthInput.value) || 200;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (fillLineThicknessInput) {
+            fillLineThicknessInput.addEventListener('input', () => {
+              p.thickness = parseFloat(fillLineThicknessInput.value) || 0.8;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (fillLineColorInput) {
+            fillLineColorInput.addEventListener('input', () => {
+              p.color = fillLineColorInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (fillLineAlignmentSelect) {
+            fillLineAlignmentSelect.addEventListener('change', () => {
+              p.alignment = fillLineAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+          
+        case 'chart':
+          const chartTypeSelect = document.getElementById('insp-chartType');
+          const chartWidthInput = document.getElementById('insp-chartWidth');
+          const chartHeightInput = document.getElementById('insp-chartHeight');
+          const chartFitWInput = document.getElementById('insp-chartFitW');
+          const chartFitHInput = document.getElementById('insp-chartFitH');
+          const chartBackgroundColorInput = document.getElementById('insp-chartBackgroundColor');
+          const chartDevicePixelRatioInput = document.getElementById('insp-chartDevicePixelRatio');
+          const chartDataInput = document.getElementById('insp-chartData');
+          const chartOptionsInput = document.getElementById('insp-chartOptions');
+          const chartAlignmentSelect = document.getElementById('insp-chartAlignment');
+          
+          if (chartTypeSelect) {
+            chartTypeSelect.addEventListener('change', () => {
+              p.chartType = chartTypeSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (chartWidthInput) {
+            chartWidthInput.addEventListener('input', () => {
+              p.chartWidth = parseInt(chartWidthInput.value) || 400;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (chartHeightInput) {
+            chartHeightInput.addEventListener('input', () => {
+              p.chartHeight = parseInt(chartHeightInput.value) || 200;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (chartFitWInput) {
+            chartFitWInput.addEventListener('input', () => {
+              if (!Array.isArray(p.chartFit)) p.chartFit = [400, 200];
+              p.chartFit[0] = parseInt(chartFitWInput.value) || 400;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (chartFitHInput) {
+            chartFitHInput.addEventListener('input', () => {
+              if (!Array.isArray(p.chartFit)) p.chartFit = [400, 200];
+              p.chartFit[1] = parseInt(chartFitHInput.value) || 200;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (chartBackgroundColorInput) {
+            chartBackgroundColorInput.addEventListener('input', () => {
+              p.chartBackgroundColor = chartBackgroundColorInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (chartDevicePixelRatioInput) {
+            chartDevicePixelRatioInput.addEventListener('input', () => {
+              p.chartDevicePixelRatio = parseInt(chartDevicePixelRatioInput.value) || 2;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          
+          if (chartDataInput) {
+            chartDataInput.addEventListener('input', () => {
+              try {
+                const parsed = JSON.parse(chartDataInput.value);
+                p.chartData = parsed;
+              } catch (e) {
+                // Ignorar JSON inválido temporariamente
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 500);
+            });
+          }
+          
+          if (chartOptionsInput) {
+            chartOptionsInput.addEventListener('input', () => {
+              try {
+                const parsed = JSON.parse(chartOptionsInput.value);
+                // Garantir que animation.duration seja 0
+                if (!parsed.animation) parsed.animation = {};
+                parsed.animation.duration = 0;
+                parsed.responsive = false;
+                p.chartOptions = parsed;
+              } catch (e) {
+                // Ignorar JSON inválido temporariamente
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 500);
+            });
+          }
+          
+          if (chartAlignmentSelect) {
+            chartAlignmentSelect.addEventListener('change', () => {
+              p.alignment = chartAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
       }
     }
 
@@ -8593,6 +9566,83 @@ function renderElementRecursive(el) {
         if (p.color) svgObj.color = p.color;
         if (p.alignment) svgObj.alignment = p.alignment;
         return svgObj;
+      }
+
+      if (el.type === 'stamp') {
+        const stampObj = {
+          stampType: p.sourceType || 'image',
+          stamp: p.value || '',
+          fit: Array.isArray(p.fit) ? p.fit : [p.fit || 120, p.fit || 120],
+          alignment: p.alignment || 'center',
+          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        };
+        
+        if (p.opacity !== undefined) {
+          stampObj.opacity = Number(p.opacity);
+        }
+        
+        return stampObj;
+      }
+
+      if (el.type === 'checkbox') {
+        const checkboxObj = {
+          checkbox: true,
+          checked: p.checked === true,
+          size: Number(p.size || 12),
+          strokeWidth: Number(p.strokeWidth || 1.2),
+          color: p.color || '#000000',
+          alignment: p.alignment || 'center',
+          verticalAlignment: p.verticalAlignment || 'middle',
+          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        };
+        
+        return checkboxObj;
+      }
+
+      if (el.type === 'radio') {
+        const radioObj = {
+          radio: true,
+          checked: p.checked === true,
+          size: Number(p.size || 12),
+          strokeWidth: Number(p.strokeWidth || 1.2),
+          color: p.color || '#000000',
+          alignment: p.alignment || 'center',
+          verticalAlignment: p.verticalAlignment || 'middle',
+          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        };
+        
+        return radioObj;
+      }
+
+      if (el.type === 'fillLine') {
+        const fillLineObj = {
+          fillLine: true,
+          lineWidth: Number(p.lineWidth || 200),
+          thickness: Number(p.thickness || 0.8),
+          color: p.color || '#000000',
+          alignment: p.alignment || 'left',
+          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        };
+        
+        return fillLineObj;
+      }
+
+      if (el.type === 'chart') {
+        const chartObj = {
+          chart: true,
+          chartType: p.chartType || 'bar',
+          chartWidth: Number(p.chartWidth || 400),
+          chartHeight: Number(p.chartHeight || 200),
+          chartFit: Array.isArray(p.chartFit) ? p.chartFit : [p.chartFit || 400, p.chartFit || 200],
+          chartBackgroundColor: p.chartBackgroundColor || '#FFFFFF',
+          chartDevicePixelRatio: Number(p.chartDevicePixelRatio || 2),
+          chartData: p.chartData || { labels: [], datasets: [] },
+          chartOptions: p.chartOptions || { responsive: false, animation: { duration: 0 } },
+          alignment: p.alignment || 'center',
+          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        };
+        
+        return chartObj;
       }
 
       if (el.type === 'barcode') {
