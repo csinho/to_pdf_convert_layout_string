@@ -13,6 +13,8 @@
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   <!-- Chart.js for chart generation -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   
   <style>
     * {
@@ -287,7 +289,7 @@
     .icon-header { background: #a855f7; }
     .icon-image { background: #10b981; }
     .icon-table { background: #f97316; }
-    .icon-columns { background: #ec4899; }
+    .icon-columns { background: #22830a; }
     .icon-list { background: #06b6d4; }
     .icon-margin { background: #6b7280; }
     .icon-pagebreak { background: #ef4444; }
@@ -298,7 +300,7 @@
     .icon-chart { background: #f31862; }
     .icon-qr { background: #ff2f2f; }
     .icon-svg { background: #fc2fff; }
-    .icon-barcode { background: #cbff2f; }
+    .icon-barcode { background: #b113fa; }
     .icon-group { background: #8b5cf6; }
 
     .info-box {
@@ -1536,8 +1538,8 @@
               <input id="mB" type="number" value="60" min="0" />
             </div>
     
-            <button class="btn primary" id="previewBtn">Pré-visualizar PDF</button>
-            <button class="btn primary" id="bubbleTestBtn">Teste Bubble</button>
+            <!--<button class="btn primary" id="previewBtn">Pré-visualizar PDF</button>-->
+            <button class="btn primary" id="bubbleTestBtn">Pré-visualizar PDF</button>
             <button class="btn" id="loadTemplateBtn" title="Carregar template salvo">📂 Carregar Template</button>
           </div>
       </div>
@@ -1550,20 +1552,42 @@
         <h2>Container</h2>
         <div class="elements-grid">
           <div class="element-btn" draggable="true" ondragstart="startDrag('group', event)">
-            <div class="element-icon icon-group">⊞</div>
+            <div class="element-icon icon-group">
+              <svg id="group-icon-template" width="25" height="25" viewBox="0 0 32 32">
+                <path fill="#fff" d="M28 28H4a2 2 0 0 1-2-2v-5h2v5h24v-5h2v5a2 2 0 0 1-2 2" />
+                <path fill="#fff" d="M7 21h18v2H7zm0-5h18v2H7zm0-5h18v2H7zm0-5h18v2H7z" />
+              </svg>
+            </div>
             <span>Grupo</span>
           </div>
 
           <div class="element-btn" draggable="true" ondragstart="startDrag('table', event)">
-            <div class="element-icon icon-table">⊞</div>
+            <div class="element-icon icon-table">
+              <div class="element-icon icon-table">              
+                <svg id="table-icon-template" width="24" height="24" viewBox="0 0 24 24">
+                  <path fill="#fff" d="M11 16H3v5h8zm2 0v5h8v-5zm-2-2V9H3v5zm2 0h8V9h-8zM3 7h18V3H3z" />
+                </svg>                
+              </div>
+            </div>
             <span>Tabela</span>
           </div>
+
           <div class="element-btn" draggable="true" ondragstart="startDrag('columns', event)">
-            <div class="element-icon icon-columns">∿</div>
+            <div class="element-icon icon-columns">              
+              <svg id="columns-icon-template" width="25" height="25" viewBox="0 0 24 24">
+                <path fill="#fff" d="M3 19V5h5.325v14zm6.325 0V5h5.325v14zm6.325 0V5h5.325v14z" />
+              </svg>              
+            </div>
             <span>Colunas</span>
           </div>
           <div class="element-btn" draggable="true" ondragstart="startDrag('list', event)">
-            <div class="element-icon icon-list">≡</div>
+            <div class="element-icon icon-list">
+              <div class="element-icon icon-list">              
+                <svg id="list-icon-template"width="24" height="24" viewBox="0 0 24 24">
+                  <path fill="#fff" d="M3 8h18V5.5q0-.625-.437-1.062T19.5 4h-15q-.625 0-1.062.438T3 5.5zm0 6h18v-4H3zm1.5 6h15q.625 0 1.063-.437T21 18.5V16H3v2.5q0 .625.438 1.063T4.5 20M5 7q-.425 0-.712-.288T4 6t.288-.712T5 5t.713.288T6 6t-.288.713T5 7m0 6q-.425 0-.712-.288T4 12t.288-.712T5 11t.713.288T6 12t-.288.713T5 13m0 6q-.425 0-.712-.288T4 18t.288-.712T5 17t.713.288T6 18t-.288.713T5 19" />
+                </svg>
+              </div>
+            </div>
             <span>Lista</span>
           </div>
         </div>
@@ -1583,7 +1607,11 @@
             <span>Imagem</span>
           </div>
           <div class="element-btn" draggable="true" ondragstart="startDrag('margin', event)">
-            <div class="element-icon icon-margin">▦</div>
+            <div class="element-icon icon-margin">          
+                <svg id="margin-icon-template" width="24" height="24" viewBox="0 0 24 24">
+                  <path fill="#fff" d="M3 22q-.425 0-.712-.288T2 21t.288-.712T3 20h4v-2q0-.425.288-.712T8 17h8q.425 0 .713.288T17 18v2h4q.425 0 .713.288T22 21t-.288.713T21 22zM8 7q-.425 0-.712-.288T7 6V4H3q-.425 0-.712-.288T2 3t.288-.712T3 2h18q.425 0 .713.288T22 3t-.288.713T21 4h-4v2q0 .425-.288.713T16 7z" />
+                </svg>
+            </div>
             <span>Espaço</span>
           </div>
           <div class="element-btn" draggable="true" ondragstart="startDrag('pageBreak', event)">
@@ -1591,7 +1619,11 @@
             <span>Quebra Página</span>
           </div>
           <div class="element-btn" draggable="true" ondragstart="startDrag('qr', event)">
-            <div class="element-icon icon-qr">📱</div>
+            <div class="element-icon icon-qr">
+              <svg id="qr-icon-template" width="24" height="24" viewBox="0 0 24 24">
+                <path fill="#fff" d="M3 7q-.425 0-.712-.288T2 6V3q0-.425.288-.712T3 2h3q.425 0 .713.288T7 3t-.288.713T6 4H4v2q0 .425-.288.713T3 7m0 15q-.425 0-.712-.288T2 21v-3q0-.425.288-.712T3 17t.713.288T4 18v2h2q.425 0 .713.288T7 21t-.288.713T6 22zm15 0q-.425 0-.712-.288T17 21t.288-.712T18 20h2v-2q0-.425.288-.712T21 17t.713.288T22 18v3q0 .425-.288.713T21 22zm3-15q-.425 0-.712-.288T20 6V4h-2q-.425 0-.712-.288T17 3t.288-.712T18 2h3q.425 0 .713.288T22 3v3q0 .425-.288.713T21 7m-3.5 12v-1.5H19V19zm0-3v-1.5H19V16zM16 17.5V16h1.5v1.5zM14.5 19v-1.5H16V19zM13 17.5V16h1.5v1.5zm3-3V13h1.5v1.5zM14.5 16v-1.5H16V16zM13 14.5V13h1.5v1.5zm1-3.5q-.425 0-.712-.288T13 10V6q0-.425.288-.712T14 5h4q.425 0 .713.288T19 6v4q0 .425-.288.713T18 11zm-8 8q-.425 0-.712-.288T5 18v-4q0-.425.288-.712T6 13h4q.425 0 .713.288T11 14v4q0 .425-.288.713T10 19zm0-8q-.425 0-.712-.288T5 10V6q0-.425.288-.712T6 5h4q.425 0 .713.288T11 6v4q0 .425-.288.713T10 11zm.5 6.5h3v-3h-3zm0-8h3v-3h-3zm8 0h3v-3h-3z" />
+              </svg>                            
+            </div>
             <span>QR Code</span>
           </div>
           <div class="element-btn" draggable="true" ondragstart="startDrag('svg', event)">
@@ -1599,7 +1631,11 @@
             <span>SVG</span>
           </div>
           <div class="element-btn" draggable="true" ondragstart="startDrag('barcode', event)">
-            <div class="element-icon icon-barcode">📊</div>
+            <div class="element-icon icon-barcode">
+              <svg id="barcode-icon-template" width="24" height="24" viewBox="0 0 24 24">
+                <path fill="#fff" d="M6 20q0 .425-.288.713T5 21H2q-.425 0-.712-.288T1 20v-3q0-.425.288-.712T2 16t.713.288T3 17v2h2q.425 0 .713.288T6 20m16-4q.425 0 .713.288T23 17v3q0 .425-.288.713T22 21h-3q-.425 0-.712-.288T18 20t.288-.712T19 19h2v-2q0-.425.288-.712T22 16M4.5 18q-.2 0-.35-.15T4 17.5v-11q0-.2.15-.35T4.5 6h1q.2 0 .35.15T6 6.5v11q0 .2-.15.35T5.5 18zm3 0q-.2 0-.35-.15T7 17.5v-11q0-.2.15-.35T7.5 6t.35.15t.15.35v11q0 .2-.15.35T7.5 18m3 0q-.2 0-.35-.15T10 17.5v-11q0-.2.15-.35T10.5 6h1q.2 0 .35.15t.15.35v11q0 .2-.15.35t-.35.15zm3 0q-.2 0-.35-.15T13 17.5v-11q0-.2.15-.35T13.5 6h2q.2 0 .35.15t.15.35v11q0 .2-.15.35t-.35.15zm4 0q-.2 0-.35-.15T17 17.5v-11q0-.2.15-.35T17.5 6t.35.15t.15.35v11q0 .2-.15.35t-.35.15m2 0q-.2 0-.35-.15T19 17.5v-11q0-.2.15-.35T19.5 6t.35.15t.15.35v11q0 .2-.15.35t-.35.15M6 4q0 .425-.288.713T5 5H3v2q0 .425-.288.713T2 8t-.712-.288T1 7V4q0-.425.288-.712T2 3h3q.425 0 .713.288T6 4m12 0q0-.425.288-.712T19 3h3q.425 0 .713.288T23 4v3q0 .425-.288.713T22 8t-.712-.288T21 7V5h-2q-.425 0-.712-.288T18 4" />
+              </svg>
+            </div>
             <span>Barcode</span>
           </div>
           <div class="element-btn" draggable="true" ondragstart="startDrag('stamp', event)">
@@ -1769,6 +1805,52 @@
     // Page Info (Metadados) e Compress
     let documentPageInfo = null; // { author: '', title: '', subject: '', keywords: '' }
     let documentCompress = false; // true/false
+    
+    // -----------------------
+    // Supabase - Configuração e Autenticação
+    // -----------------------
+    const SUPABASE_URL = "https://ckhqcooulkucxpbcceat.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNraHFjb291bGt1Y3hwYmNjZWF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5NTQ3OTQsImV4cCI6MjA4MjUzMDc5NH0.OmdLp5Nf261BqUdZP6id-QpydPrTtPUDtqi3Yi2PVXw";
+    
+    let supabaseClient = null; // Usando nome diferente para evitar conflito com variável global do Supabase
+    let currentUser = null;
+    let currentProfile = null;
+    let currentInstallation = null;
+    let currentTemplateId = null; // ID do template carregado (null = novo template)
+    
+    // Inicializar Supabase quando o script carregar
+    function initSupabase() {
+      // O Supabase JS v2 expõe createClient no objeto window.supabase
+      if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+        try {
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          console.log('Supabase inicializado com sucesso');
+          checkAuth();
+        } catch (error) {
+          console.error('Erro ao inicializar Supabase:', error);
+          showLoginModal(); // Mostrar modal mesmo com erro
+        }
+      } else {
+        console.log('Aguardando carregamento do Supabase...');
+        // Tentar novamente após um pequeno delay (máximo 10 tentativas)
+        if (typeof initSupabase.attempts === 'undefined') {
+          initSupabase.attempts = 0;
+        }
+        initSupabase.attempts++;
+        if (initSupabase.attempts < 50) { // 5 segundos máximo
+          setTimeout(initSupabase, 100);
+        } else {
+          console.error('Timeout ao carregar Supabase');
+          showLoginModal(); // Mostrar modal mesmo se não conseguir carregar
+        }
+      }
+    }
+    
+    // Aguardar carregamento do script do Supabase
+    window.addEventListener('load', () => {
+      console.log('Página carregada, iniciando Supabase...');
+      setTimeout(initSupabase, 300);
+    });
     
     // -----------------------
     // LocalStorage - Auto-save
@@ -1965,7 +2047,7 @@
     const mB = document.getElementById("mB");
     const zoomRange = document.getElementById("zoomRange");
     const zoomLabel = document.getElementById("zoomLabel");
-    const previewBtn = document.getElementById("previewBtn");
+   // const previewBtn = document.getElementById("previewBtn");
     const bubbleTestBtn = document.getElementById("bubbleTestBtn");
     const clearBtn = document.getElementById("clearBtn");
     const saveTemplateBtn = document.getElementById("saveTemplateBtn");
@@ -11413,6 +11495,9 @@ function renderElementRecursive(el) {
       documentHeader.enabled = false;
       documentFooter.enabled = false;
       
+      // Resetar template atual (ao limpar, não há mais template carregado)
+      currentTemplateId = null;
+      
       // Limpar estado salvo também
       clearSavedState();
       
@@ -11479,6 +11564,8 @@ function renderElementRecursive(el) {
       });
     }
 
+    /*
+
     previewBtn.addEventListener('click', () => {
       const dd = buildDocDefinition();
       const pdfDoc = pdfMake.createPdf(dd);
@@ -11497,7 +11584,7 @@ function renderElementRecursive(el) {
           previewModal.classList.add('active');
         }
       });
-    });
+    }); */
     
     const BUBBLE_URL = "https://mentions-20237.bubbleapps.io/version-test/preview_pdf";
 
@@ -11532,6 +11619,14 @@ function renderElementRecursive(el) {
     const TEMPLATE_STORAGE_KEY = 'pdf_editor_templates';
     
     function saveTemplate() {
+      // Se há um template carregado, atualizar diretamente sem mostrar modal
+      if (currentTemplateId) {
+        // Buscar nome do template atual para usar na atualização
+        confirmSaveTemplate();
+        return;
+      }
+      
+      // Caso contrário, mostrar modal para criar novo template
       const modal = document.getElementById('saveTemplateModal');
       const input = document.getElementById('saveTemplateNameInput');
       const errorDiv = document.getElementById('saveTemplateError');
@@ -11552,24 +11647,60 @@ function renderElementRecursive(el) {
     }
     window.saveTemplate = saveTemplate;
     
-    function confirmSaveTemplate() {
+    async function confirmSaveTemplate() {
       const input = document.getElementById('saveTemplateNameInput');
       const errorDiv = document.getElementById('saveTemplateError');
-      const templateName = input?.value.trim();
+      let templateName;
       
-      if (!templateName) {
+      // Verificar se usuário está autenticado
+      if (!currentUser || !currentProfile || !currentInstallation) {
         if (errorDiv) {
-          errorDiv.textContent = 'Por favor, digite um nome para o template.';
+          errorDiv.textContent = 'Você precisa estar logado para salvar templates.';
           errorDiv.style.display = 'block';
         }
         return;
       }
       
+      if (currentTemplateId) {
+        // Atualizar template existente - buscar nome atual do template
+        try {
+          const { data: template, error: fetchError } = await supabaseClient
+            .from('template')
+            .select('name')
+            .eq('id', currentTemplateId)
+            .eq('id_profile', currentProfile.id)
+            .eq('id_installation', currentInstallation.id)
+            .single();
+          
+          if (fetchError) {
+            throw fetchError;
+          }
+          
+          templateName = template.name;
+        } catch (e) {
+          console.error('Erro ao buscar template:', e);
+          if (errorDiv) {
+            errorDiv.textContent = 'Erro ao buscar template: ' + (e.message || e);
+            errorDiv.style.display = 'block';
+          }
+          return;
+        }
+      } else {
+        // Criar novo template - precisa do nome do input
+        templateName = input?.value.trim();
+        if (!templateName) {
+          if (errorDiv) {
+            errorDiv.textContent = 'Por favor, digite um nome para o template.';
+            errorDiv.style.display = 'block';
+          }
+          return;
+        }
+      }
+      
       try {
         const rootGroup = getRootGroup();
-        const template = {
+        const templateData = {
           name: templateName,
-          date: new Date().toISOString(),
           rootGroup: rootGroup ? JSON.parse(JSON.stringify(rootGroup)) : null,
           documentHeader: documentHeader ? JSON.parse(JSON.stringify(documentHeader)) : null,
           documentFooter: documentFooter ? JSON.parse(JSON.stringify(documentFooter)) : null,
@@ -11588,30 +11719,60 @@ function renderElementRecursive(el) {
           ]
         };
         
-        let templates = [];
-        try {
-          const stored = localStorage.getItem(TEMPLATE_STORAGE_KEY);
-          if (stored) {
-            templates = JSON.parse(stored);
+        // Converter template para JSON string (campo cod no Supabase)
+        const cod = JSON.stringify(templateData);
+        
+        if (currentTemplateId) {
+          // Atualizar template existente
+          const { data, error } = await supabaseClient
+            .from('template')
+            .update({
+              cod: cod,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', currentTemplateId)
+            .eq('id_profile', currentProfile.id)
+            .eq('id_installation', currentInstallation.id);
+          
+          if (error) {
+            throw error;
           }
-        } catch (e) {
-          console.warn('Erro ao carregar templates:', e);
-        }
-        
-        // Remover template com mesmo nome se existir
-        templates = templates.filter(t => t.name !== template.name);
-        templates.push(template);
-        
-        localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
-        closeSaveTemplateModal();
-        
-        if (typeof showAlertModal === 'function') {
-          showAlertModal('Sucesso', `Template "${templateName}" salvo com sucesso!`);
+          
+          closeSaveTemplateModal();
+          
+          if (typeof showAlertModal === 'function') {
+            showAlertModal('Sucesso', `Template "${templateName}" atualizado com sucesso!`);
+          }
+        } else {
+          // Criar novo template
+          const { data, error } = await supabaseClient
+            .from('template')
+            .insert({
+              id_profile: currentProfile.id,
+              id_installation: currentInstallation.id,
+              name: templateName,
+              cod: cod
+            })
+            .select()
+            .single();
+          
+          if (error) {
+            throw error;
+          }
+          
+          // Salvar ID do template criado
+          currentTemplateId = data.id;
+          
+          closeSaveTemplateModal();
+          
+          if (typeof showAlertModal === 'function') {
+            showAlertModal('Sucesso', `Template "${templateName}" salvo com sucesso!`);
+          }
         }
       } catch (e) {
         console.error('Erro ao salvar template:', e);
         if (errorDiv) {
-          errorDiv.textContent = 'Erro ao salvar template: ' + e.message;
+          errorDiv.textContent = 'Erro ao salvar template: ' + (e.message || e);
           errorDiv.style.display = 'block';
         }
       }
@@ -11626,23 +11787,34 @@ function renderElementRecursive(el) {
     }
     window.closeSaveTemplateModal = closeSaveTemplateModal;
     
-    function loadTemplate() {
+    async function loadTemplate() {
       const modal = document.getElementById('loadTemplateModal');
       const listDiv = document.getElementById('loadTemplateList');
       const emptyDiv = document.getElementById('loadTemplateEmpty');
       
       if (!modal || !listDiv) return;
       
+      // Verificar se usuário está autenticado
+      if (!currentUser || !currentProfile || !currentInstallation) {
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Erro', 'Você precisa estar logado para carregar templates.');
+        }
+        return;
+      }
+      
       try {
-        const stored = localStorage.getItem(TEMPLATE_STORAGE_KEY);
-        if (!stored) {
-          if (emptyDiv) emptyDiv.style.display = 'block';
-          if (listDiv) listDiv.style.display = 'none';
-          modal.classList.add('active');
-          return;
+        // Buscar templates do Supabase
+        const { data: templates, error } = await supabaseClient
+          .from('template')
+          .select('*')
+          .eq('id_profile', currentProfile.id)
+          .eq('id_installation', currentInstallation.id)
+          .order('updated_at', { ascending: false });
+        
+        if (error) {
+          throw error;
         }
         
-        const templates = JSON.parse(stored);
         if (!templates || templates.length === 0) {
           if (emptyDiv) emptyDiv.style.display = 'block';
           if (listDiv) listDiv.style.display = 'none';
@@ -11652,7 +11824,7 @@ function renderElementRecursive(el) {
         
         // Criar lista de templates
         listDiv.innerHTML = '';
-        templates.forEach((template, index) => {
+        templates.forEach((template) => {
           const templateItem = document.createElement('div');
           templateItem.style.cssText = 'padding: 1rem; margin-bottom: 0.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer; transition: background 0.2s;';
           templateItem.onmouseenter = () => templateItem.style.background = '#f3f4f6';
@@ -11664,7 +11836,7 @@ function renderElementRecursive(el) {
           
           const dateDiv = document.createElement('div');
           dateDiv.style.cssText = 'font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;';
-          dateDiv.textContent = `Salvo em: ${new Date(template.date).toLocaleString('pt-BR')}`;
+          dateDiv.textContent = `Atualizado em: ${new Date(template.updated_at).toLocaleString('pt-BR')}`;
           
           const buttonDiv = document.createElement('div');
           buttonDiv.style.cssText = 'display: flex; gap: 0.5rem;';
@@ -11682,7 +11854,7 @@ function renderElementRecursive(el) {
           deleteBtn.style.cssText = 'flex: 1; padding: 0.5rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;';
           deleteBtn.onclick = (e) => {
             e.stopPropagation();
-            deleteTemplate(template.name, index);
+            deleteTemplate(template.id, template.name);
           };
           
           buttonDiv.appendChild(loadBtn);
@@ -11711,20 +11883,31 @@ function renderElementRecursive(el) {
       // Fechar modal de templates primeiro
       closeLoadTemplateModal();
       
+      // Salvar ID do template carregado para atualização posterior
+      currentTemplateId = template.id;
+      
       // Função para carregar o template
       const doLoadTemplate = () => {
         try {
+          // Parsear o campo cod que contém o JSON do template
+          let templateData;
+          if (typeof template.cod === 'string') {
+            templateData = JSON.parse(template.cod);
+          } else {
+            templateData = template.cod || {};
+          }
+          
           // Carregar template - fazer deep copy para evitar referências
-          if (template.rootGroup) {
-            const rootGroupCopy = JSON.parse(JSON.stringify(template.rootGroup));
+          if (templateData.rootGroup) {
+            const rootGroupCopy = JSON.parse(JSON.stringify(templateData.rootGroup));
             elements = [rootGroupCopy];
           } else {
             elements = [];
           }
           
           // Fazer deep copy de todos os objetos para evitar referências
-          if (template.documentHeader) {
-            documentHeader = JSON.parse(JSON.stringify(template.documentHeader));
+          if (templateData.documentHeader) {
+            documentHeader = JSON.parse(JSON.stringify(templateData.documentHeader));
             if (!documentHeader.root) {
               documentHeader.root = createHeaderFooterRoot();
             }
@@ -11732,8 +11915,8 @@ function renderElementRecursive(el) {
             documentHeader = { enabled: false, root: createHeaderFooterRoot() };
           }
           
-          if (template.documentFooter) {
-            documentFooter = JSON.parse(JSON.stringify(template.documentFooter));
+          if (templateData.documentFooter) {
+            documentFooter = JSON.parse(JSON.stringify(templateData.documentFooter));
             if (!documentFooter.root) {
               documentFooter.root = createHeaderFooterRoot();
             }
@@ -11741,29 +11924,29 @@ function renderElementRecursive(el) {
             documentFooter = { enabled: false, root: createHeaderFooterRoot() };
           }
           
-          documentWatermark = template.documentWatermark ? JSON.parse(JSON.stringify(template.documentWatermark)) : null;
-          documentTOC = template.documentTOC ? JSON.parse(JSON.stringify(template.documentTOC)) : null;
-          documentSecurity = template.documentSecurity ? JSON.parse(JSON.stringify(template.documentSecurity)) : null;
-          documentPageInfo = template.documentPageInfo ? JSON.parse(JSON.stringify(template.documentPageInfo)) : null;
-          documentCompress = template.documentCompress || false;
+          documentWatermark = templateData.documentWatermark ? JSON.parse(JSON.stringify(templateData.documentWatermark)) : null;
+          documentTOC = templateData.documentTOC ? JSON.parse(JSON.stringify(templateData.documentTOC)) : null;
+          documentSecurity = templateData.documentSecurity ? JSON.parse(JSON.stringify(templateData.documentSecurity)) : null;
+          documentPageInfo = templateData.documentPageInfo ? JSON.parse(JSON.stringify(templateData.documentPageInfo)) : null;
+          documentCompress = templateData.documentCompress || false;
           
           // Atualizar UI
-          if (pageSizeSel && template.pageSize) {
-            pageSizeSel.value = template.pageSize;
+          if (pageSizeSel && templateData.pageSize) {
+            pageSizeSel.value = templateData.pageSize;
           }
           const orientationSel = document.getElementById('orientation');
-          if (orientationSel && template.orientation) {
-            orientationSel.value = template.orientation;
+          if (orientationSel && templateData.orientation) {
+            orientationSel.value = templateData.orientation;
           }
-          if (template.margins && Array.isArray(template.margins)) {
+          if (templateData.margins && Array.isArray(templateData.margins)) {
             const mL = document.getElementById('mL');
             const mT = document.getElementById('mT');
             const mR = document.getElementById('mR');
             const mB = document.getElementById('mB');
-            if (mL) mL.value = template.margins[0] || 40;
-            if (mT) mT.value = template.margins[1] || 60;
-            if (mR) mR.value = template.margins[2] || 40;
-            if (mB) mB.value = template.margins[3] || 60;
+            if (mL) mL.value = templateData.margins[0] || 40;
+            if (mT) mT.value = templateData.margins[1] || 60;
+            if (mR) mR.value = templateData.margins[2] || 40;
+            if (mB) mB.value = templateData.margins[3] || 60;
           }
           
           selectedElementId = null;
@@ -11814,24 +11997,48 @@ function renderElementRecursive(el) {
       }
     }
     
-    function deleteTemplate(templateName, index) {
+    async function deleteTemplate(templateId, templateName) {
       if (typeof showConfirmModal === 'function') {
         showConfirmModal(
           'Deletar Template',
           `Tem certeza que deseja deletar o template "${templateName}"?`,
-          () => {
+          async () => {
             try {
-              const stored = localStorage.getItem(TEMPLATE_STORAGE_KEY);
-              if (stored) {
-                const templates = JSON.parse(stored);
-                templates.splice(index, 1);
-                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
-                loadTemplate(); // Recarregar lista
+              // Verificar se usuário está autenticado
+              if (!currentUser || !currentProfile || !currentInstallation) {
+                if (typeof showAlertModal === 'function') {
+                  showAlertModal('Erro', 'Você precisa estar logado para deletar templates.');
+                }
+                return;
+              }
+              
+              // Deletar do Supabase
+              const { error } = await supabaseClient
+                .from('template')
+                .delete()
+                .eq('id', templateId)
+                .eq('id_profile', currentProfile.id)
+                .eq('id_installation', currentInstallation.id);
+              
+              if (error) {
+                throw error;
+              }
+              
+              // Se o template deletado era o atual, limpar currentTemplateId
+              if (currentTemplateId === templateId) {
+                currentTemplateId = null;
+              }
+              
+              // Recarregar lista
+              await loadTemplate();
+              
+              if (typeof showAlertModal === 'function') {
+                showAlertModal('Sucesso', `Template "${templateName}" deletado com sucesso!`);
               }
             } catch (e) {
               console.error('Erro ao deletar template:', e);
               if (typeof showAlertModal === 'function') {
-                showAlertModal('Erro', 'Erro ao deletar template: ' + e.message);
+                showAlertModal('Erro', 'Erro ao deletar template: ' + (e.message || e));
               }
             }
           }
@@ -11886,6 +12093,216 @@ function renderElementRecursive(el) {
       }
     });
 
+    // -----------------------
+    // Funções de Autenticação Supabase
+    // -----------------------
+    
+    async function checkAuth() {
+      if (!supabaseClient) {
+        console.log('Supabase não inicializado, tentando inicializar...');
+        initSupabase();
+        return;
+      }
+      
+      try {
+        console.log('Verificando autenticação...');
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        
+        if (error) {
+          console.error('Erro ao verificar sessão:', error);
+          showLoginModal();
+          return;
+        }
+        
+        if (session && session.user) {
+          console.log('Usuário autenticado encontrado:', session.user.email);
+          currentUser = session.user;
+          await loadUserProfile();
+          hideLoginModal();
+        } else {
+          console.log('Nenhuma sessão encontrada, mostrando modal de login');
+          showLoginModal();
+        }
+      } catch (error) {
+        console.error('Erro ao verificar autenticação:', error);
+        showLoginModal();
+      }
+    }
+    
+    async function loadUserProfile() {
+      if (!currentUser) return;
+      
+      try {
+        // Buscar ou criar profile
+        let { data: profile, error } = await supabaseClient
+          .from('profile')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .single();
+        
+        if (error && error.code === 'PGRST116') {
+          // Profile não existe, criar um novo
+          const { data: newProfile, error: createError } = await supabaseClient
+            .from('profile')
+            .insert({
+              user_id: currentUser.id,
+              email: currentUser.email,
+              full_name: currentUser.email?.split('@')[0] || 'Usuário'
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Erro ao criar profile:', createError);
+            return;
+          }
+          
+          currentProfile = newProfile;
+        } else if (error) {
+          console.error('Erro ao carregar profile:', error);
+          return;
+        } else {
+          currentProfile = profile;
+        }
+        
+        // Buscar ou criar installation (usando app_id padrão por enquanto)
+        // Você pode ajustar isso conforme necessário
+        const appId = 'default_app';
+        let { data: installation, error: instError } = await supabaseClient
+          .from('installation')
+          .select('*')
+          .eq('id_profile', currentProfile.id)
+          .eq('app_id', appId)
+          .eq('status', 'active')
+          .single();
+        
+        if (instError && instError.code === 'PGRST116') {
+          // Installation não existe, criar uma nova
+          const { data: newInstallation, error: createInstError } = await supabaseClient
+            .from('installation')
+            .insert({
+              id_profile: currentProfile.id,
+              app_id: appId,
+              access_token: 'default_token', // Você pode ajustar isso
+              status: 'active'
+            })
+            .select()
+            .single();
+          
+          if (createInstError) {
+            console.error('Erro ao criar installation:', createInstError);
+            return;
+          }
+          
+          currentInstallation = newInstallation;
+        } else if (instError) {
+          console.error('Erro ao carregar installation:', instError);
+          return;
+        } else {
+          currentInstallation = installation;
+        }
+        
+        console.log('Usuário autenticado:', currentUser.email);
+        console.log('Profile carregado:', currentProfile);
+        console.log('Installation carregada:', currentInstallation);
+      } catch (error) {
+        console.error('Erro ao carregar dados do usuário:', error);
+      }
+    }
+    
+    function showLoginModal() {
+      const modal = document.getElementById('loginModal');
+      if (modal) {
+        modal.classList.add('active');
+        const emailInput = document.getElementById('loginEmailInput');
+        if (emailInput) emailInput.focus();
+      }
+    }
+    
+    function hideLoginModal() {
+      const modal = document.getElementById('loginModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+    
+    async function handleLogin() {
+      const emailInput = document.getElementById('loginEmailInput');
+      const passwordInput = document.getElementById('loginPasswordInput');
+      const errorDiv = document.getElementById('loginError');
+      
+      const email = emailInput?.value.trim();
+      const password = passwordInput?.value;
+      
+      if (!email || !password) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Por favor, preencha e-mail e senha.';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+      
+      if (!supabaseClient) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Erro: Supabase não inicializado.';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data && data.user) {
+          currentUser = data.user;
+          await loadUserProfile();
+          hideLoginModal();
+          
+          // Limpar campos
+          if (emailInput) emailInput.value = '';
+          if (passwordInput) passwordInput.value = '';
+          if (errorDiv) errorDiv.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Erro ao fazer login:', error);
+        if (errorDiv) {
+          errorDiv.textContent = error.message || 'Erro ao fazer login. Verifique suas credenciais.';
+          errorDiv.style.display = 'block';
+        }
+      }
+    }
+    
+    window.handleLogin = handleLogin;
+    
+    // Permitir login com Enter
+    document.addEventListener('DOMContentLoaded', () => {
+      const emailInput = document.getElementById('loginEmailInput');
+      const passwordInput = document.getElementById('loginPasswordInput');
+      
+      if (emailInput) {
+        emailInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            passwordInput?.focus();
+          }
+        });
+      }
+      
+      if (passwordInput) {
+        passwordInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            handleLogin();
+          }
+        });
+      }
+    });
+    
     // init
     function closeModal(){ const m=document.getElementById('modal'); if(m) m.classList.remove('active'); }
     function openModal(){ const m=document.getElementById('modal'); if(m) m.classList.add('active'); }
@@ -12067,6 +12484,25 @@ function renderElementRecursive(el) {
       </div>
       <div class="custom-modal-footer">
         <button class="custom-modal-btn custom-modal-btn-cancel" onclick="closeLoadTemplateModal()" style="width: 100%;">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Login -->
+  <div id="loginModal" class="custom-modal" style="z-index: 10000;">
+    <div class="custom-modal-overlay" style="pointer-events: auto;"></div>
+    <div class="custom-modal-content" style="max-width: 400px;">
+      <div class="custom-modal-header">
+        <h3>🔐 Login</h3>
+      </div>
+      <div class="custom-modal-body">
+        <p style="margin-bottom: 1rem; color: #6b7280;">Faça login para continuar:</p>
+        <input type="email" id="loginEmailInput" placeholder="E-mail" style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 1rem; margin-bottom: 0.75rem;" autofocus>
+        <input type="password" id="loginPasswordInput" placeholder="Senha" style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 1rem; margin-bottom: 0.75rem;">
+        <div id="loginError" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 0.25rem; color: #991b1b; font-size: 0.875rem;"></div>
+      </div>
+      <div class="custom-modal-footer">
+        <button class="custom-modal-btn custom-modal-btn-confirm" onclick="handleLogin()" style="width: 100%;">Entrar</button>
       </div>
     </div>
   </div>
