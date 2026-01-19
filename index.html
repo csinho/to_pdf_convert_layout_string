@@ -5538,7 +5538,7 @@
       const fullText = helpText ? text + '\\n\\n' + helpText : text;
       return `
         <span style="position: relative; display: inline-block; margin-left: 0.25rem; cursor: help;" title="${escapeHtml(fullText)}">
-          <span style="color: #6b7280; font-size: 0.875rem;">ℹ️</span>
+          <span style="color: var(--text-tertiary); font-size: 0.875rem;">ℹ️</span>
         </span>
       `;
     }
@@ -5625,9 +5625,9 @@
 
             // Adicionar campo para editar verticalAlignment da célula
             html += `
-              <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+              <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
                 <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Alinhamento Vertical da Célula</label>
-                <select id="insp-cellVerticalAlignment" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem;">
+                <select id="insp-cellVerticalAlignment" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
                   <option value="top" ${cell.verticalAlignment === 'top' ? 'selected' : ''}>Topo</option>
                   <option value="middle" ${cell.verticalAlignment === 'middle' || !cell.verticalAlignment ? 'selected' : ''}>Meio</option>
                   <option value="bottom" ${cell.verticalAlignment === 'bottom' ? 'selected' : ''}>Inferior</option>
@@ -5641,26 +5641,26 @@
         // Adicionar botões de reordenação para elementos dentro de containers
         if (showReorder && children.length > 1) {
           html += `
-            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
               <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Reordenar Elemento</label>
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                 <button id="btn-move-first" onclick="moveElementInContainer('first')" 
-                        style="padding: 0.5rem; background: ${isFirst ? '#e5e7eb' : '#2563eb'}; color: ${isFirst ? '#9ca3af' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
+                        style="padding: 0.5rem; background: ${isFirst ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirst ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
                         ${isFirst ? 'disabled' : ''}>
                   ⏮️ Primeiro
                 </button>
                 <button id="btn-move-prev" onclick="moveElementInContainer('prev')" 
-                        style="padding: 0.5rem; background: ${isFirst ? '#e5e7eb' : '#2563eb'}; color: ${isFirst ? '#9ca3af' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
+                        style="padding: 0.5rem; background: ${isFirst ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirst ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
                         ${isFirst ? 'disabled' : ''}>
                   ⬅️ Anterior
                 </button>
                 <button id="btn-move-next" onclick="moveElementInContainer('next')" 
-                        style="padding: 0.5rem; background: ${isLast ? '#e5e7eb' : '#2563eb'}; color: ${isLast ? '#9ca3af' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
+                        style="padding: 0.5rem; background: ${isLast ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLast ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
                         ${isLast ? 'disabled' : ''}>
                   ➡️ Próximo
                 </button>
                 <button id="btn-move-last" onclick="moveElementInContainer('last')" 
-                        style="padding: 0.5rem; background: ${isLast ? '#e5e7eb' : '#2563eb'}; color: ${isLast ? '#9ca3af' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
+                        style="padding: 0.5rem; background: ${isLast ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLast ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
                         ${isLast ? 'disabled' : ''}>
                   ⏭️ Último
                 </button>
@@ -5691,7 +5691,7 @@
         const cols = element.properties.columns || [];
         if (cols.length > 0) {
           html += `
-            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
               <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Reordenar Colunas</label>
               <div class="smallNote" style="margin-bottom: 0.5rem;">Selecione uma coluna abaixo para movê-la</div>
           `;
@@ -5702,27 +5702,27 @@
             html += `
               <div style="margin-bottom: 0.5rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
-                  <span style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.6);">Coluna ${colIndex + 1}</span>
+                  <span style="font-size: 0.875rem; color: var(--text-secondary);">Coluna ${colIndex + 1}</span>
                 </div>
                 ${cols.length > 1 ? `
                   <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.25rem;">
                     <button onclick="moveColumnInColumns('${element.id}', ${colIndex}, 'first')" 
-                            style="padding: 0.25rem; background: ${isFirstCol ? '#e5e7eb' : '#2563eb'}; color: ${isFirstCol ? '#9ca3af' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            style="padding: 0.25rem; background: ${isFirstCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirstCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
                             ${isFirstCol ? 'disabled' : ''}>
                       ⇤
                     </button>
                     <button onclick="moveColumnInColumns('${element.id}', ${colIndex}, 'prev')" 
-                            style="padding: 0.25rem; background: ${isFirstCol ? '#e5e7eb' : '#2563eb'}; color: ${isFirstCol ? '#9ca3af' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            style="padding: 0.25rem; background: ${isFirstCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirstCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
                             ${isFirstCol ? 'disabled' : ''}>
                       ←
                     </button>
                     <button onclick="moveColumnInColumns('${element.id}', ${colIndex}, 'next')" 
-                            style="padding: 0.25rem; background: ${isLastCol ? '#e5e7eb' : '#2563eb'}; color: ${isLastCol ? '#9ca3af' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            style="padding: 0.25rem; background: ${isLastCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLastCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
                             ${isLastCol ? 'disabled' : ''}>
                       →
                     </button>
                     <button onclick="moveColumnInColumns('${element.id}', ${colIndex}, 'last')" 
-                            style="padding: 0.25rem; background: ${isLastCol ? '#e5e7eb' : '#2563eb'}; color: ${isLastCol ? '#9ca3af' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            style="padding: 0.25rem; background: ${isLastCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLastCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
                             ${isLastCol ? 'disabled' : ''}>
                       ⇥
                     </button>
@@ -5741,7 +5741,7 @@
         if (body.length > 0 && body[0].length > 0) {
           const numCols = body[0].length;
           html += `
-            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
               <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Reordenar Colunas da Tabela</label>
               <div class="smallNote" style="margin-bottom: 0.5rem;">Selecione uma coluna abaixo para movê-la</div>
           `;
@@ -5752,27 +5752,27 @@
             html += `
               <div style="margin-bottom: 0.5rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
-                  <span style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.6);">Coluna ${colIndex + 1}</span>
+                  <span style="font-size: 0.875rem; color: var(--text-secondary);">Coluna ${colIndex + 1}</span>
                 </div>
                 ${numCols > 1 ? `
                   <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.25rem;">
                     <button onclick="moveColumnInTable('${element.id}', ${colIndex}, 'first')" 
-                            style="padding: 0.25rem; background: ${isFirstCol ? '#e5e7eb' : '#2563eb'}; color: ${isFirstCol ? '#9ca3af' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            style="padding: 0.25rem; background: ${isFirstCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirstCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
                             ${isFirstCol ? 'disabled' : ''}>
                       ⇤
                     </button>
                     <button onclick="moveColumnInTable('${element.id}', ${colIndex}, 'prev')" 
-                            style="padding: 0.25rem; background: ${isFirstCol ? '#e5e7eb' : '#2563eb'}; color: ${isFirstCol ? '#9ca3af' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            style="padding: 0.25rem; background: ${isFirstCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirstCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
                             ${isFirstCol ? 'disabled' : ''}>
                       ←
                     </button>
                     <button onclick="moveColumnInTable('${element.id}', ${colIndex}, 'next')" 
-                            style="padding: 0.25rem; background: ${isLastCol ? '#e5e7eb' : '#2563eb'}; color: ${isLastCol ? '#9ca3af' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            style="padding: 0.25rem; background: ${isLastCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLastCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
                             ${isLastCol ? 'disabled' : ''}>
                       →
                     </button>
                     <button onclick="moveColumnInTable('${element.id}', ${colIndex}, 'last')" 
-                            style="padding: 0.25rem; background: ${isLastCol ? '#e5e7eb' : '#2563eb'}; color: ${isLastCol ? '#9ca3af' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            style="padding: 0.25rem; background: ${isLastCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLastCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
                             ${isLastCol ? 'disabled' : ''}>
                       ⇥
                     </button>
@@ -5842,7 +5842,7 @@
 
       // Adicionar botões de ação no final do inspector
       html += `
-        <div class="inspector-field" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+        <div class="inspector-field" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
             <button class="btn-duplicate" onclick="duplicateSelectedElement()" style="padding: 0.75rem 1rem; background: #2563eb; color: white; border: none; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background 0.2s;">
               📋 Duplicar
@@ -6225,8 +6225,8 @@
           </select>
           <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Alinhamento vertical do conteúdo dentro das colunas</div>
         </div>
-        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
-          <label style="font-weight: 500; margin-bottom: 0.75rem;">Larguras das Colunas</label>
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Larguras das Colunas</label>
           ${cols.map((col, idx) => {
         const width = col.width || '*';
         let widthType = 'auto';
@@ -6247,32 +6247,32 @@
         }
 
         return `
-              <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: #1f2937; border: 1px solid #374151; border-radius: 0.375rem;">
+              <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                  <label style="font-weight: 500; color: #f3f4f6;">Coluna ${idx + 1}</label>
+                  <label style="font-weight: 500; color: var(--text-primary);">Coluna ${idx + 1}</label>
                   ${idx > 0 ? `
                     <button type="button" class="btn-delete-col" data-col-index="${idx}" style="padding: 0.25rem 0.5rem; background: #ef4444; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">🗑️</button>
                   ` : ''}
             </div>
                 <div class="row">
                   <div style="flex: 1;">
-                    <label class="smallNote" style="color: #d1d5db;">Tipo de Largura</label>
-                    <select class="col-width-type" data-col-index="${idx}" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                    <label class="smallNote" style="color: var(--text-secondary);">Tipo de Largura</label>
+                    <select class="col-width-type" data-col-index="${idx}" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                       <option value="auto" ${widthType === 'auto' ? 'selected' : ''}>Automático (*)</option>
                       <option value="pixels" ${widthType === 'pixels' ? 'selected' : ''}>Pixels (px)</option>
                       <option value="percentage" ${widthType === 'percentage' ? 'selected' : ''}>Porcentagem (%)</option>
                     </select>
               </div>
                   <div style="flex: 1; ${widthType === 'auto' ? 'display: none;' : ''}" id="col-width-value-${idx}">
-                    <label class="smallNote" style="color: #d1d5db;">Valor</label>
-                    <input type="number" class="col-width-value" data-col-index="${idx}" value="${widthValue}" min="0" step="${widthType === 'percentage' ? '1' : '1'}" placeholder="${widthType === 'percentage' ? '50' : '100'}" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                    <label class="smallNote" style="color: var(--text-secondary);">Valor</label>
+                    <input type="number" class="col-width-value" data-col-index="${idx}" value="${widthValue}" min="0" step="${widthType === 'percentage' ? '1' : '1'}" placeholder="${widthType === 'percentage' ? '50' : '100'}" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
               </div>
             </div>
             </div>
           `;
       }).join('')}
-          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: #d1d5db;">
-            <strong style="color: #f3f4f6;">Tipos de largura:</strong><br>
+          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">
+            <strong style="color: var(--text-primary);">Tipos de largura:</strong><br>
             • Automático (*): divide o espaço igualmente entre as colunas<br>
             • Pixels: largura fixa em pontos (ex: 100, 200)<br>
             • Porcentagem: largura em % do espaço disponível (ex: 30, 50)
@@ -6352,7 +6352,7 @@
             <input type="color" id="insp-markerColor" value="${p.markerColor || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
             <input type="text" id="insp-markerColorText" value="${p.markerColor || ''}" placeholder="Deixe vazio para usar cor padrão" style="flex: 1; font-size: 0.875rem;">
           </div>
-          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Aplica-se apenas a listas não ordenadas (ul)</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Aplica-se apenas a listas não ordenadas (ul)</div>
         </div>
         ` : ''}
         ${renderMarginSection(element)}
@@ -6368,7 +6368,7 @@
 
       return `
         <div class="inspector-field">
-          <div class="smallNote" style="padding: 0.75rem; background: #111827; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem;">
+          <div class="smallNote" style="padding: 0.75rem; background: var(--bg-tertiary); border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: var(--text-primary);">
             <strong>📋 Estrutura da Tabela:</strong><br>
             • <strong>Linha 1</strong> = Cabeçalho (nomes das colunas)<br>
             • <strong>Linhas ${numRows > 1 ? '2-' + numRows : '2'}</strong> = Dados da tabela
@@ -6383,7 +6383,7 @@
             <div>
               <label class="smallNote">Linhas de Dados</label>
               <input type="number" id="insp-tableRows" value="${numDataRows}" min="1" max="20">
-              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">
                 (Total: ${numRows} linhas incluindo cabeçalho)
               </div>
             </div>
@@ -6392,7 +6392,7 @@
         <div class="inspector-field">
           <label class="smallNote">Linhas de Cabeçalho (headerRows) ${createTooltip('Define quantas linhas da tabela serão repetidas em cada página como cabeçalho.', 'Padrão: 1 linha. Se definir 2, as duas primeiras linhas serão cabeçalho.')}</label>
           <input type="number" id="insp-tableHeaderRows" value="${p.headerRows !== undefined ? p.headerRows : 1}" min="0" max="${numRows}">
-          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">
             Número de linhas que serão consideradas como cabeçalho (padrão: 1)
           </div>
         </div>
@@ -6404,7 +6404,7 @@
             <option value="noBorders" ${p.layout === 'noBorders' ? 'selected' : ''}>Sem Bordas</option>
             <option value="custom" ${p.layout === 'custom' || (p.customLayout && Object.keys(p.customLayout).length > 0) ? 'selected' : ''}>Customizado</option>
           </select>
-          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Escolha "Customizado" para definir cores e larguras das linhas manualmente</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Escolha "Customizado" para definir cores e larguras das linhas manualmente</div>
         </div>
         
         ${(p.layout === 'custom' || (p.customLayout && Object.keys(p.customLayout).length > 0)) ? `
@@ -6414,78 +6414,78 @@
         ` : ''}
         ${(p.layout === 'custom' || (p.customLayout && Object.keys(p.customLayout).length > 0)) ? `
         <div class="inspector-field" id="tableCustomLayoutOptions">
-          <label style="font-weight: 500; margin-bottom: 0.75rem; color: #f3f4f6;">Layout Customizado</label>
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Layout Customizado</label>
           
           <div style="margin-bottom: 1rem;">
-            <label class="smallNote" style="color: #d1d5db;">Linhas Horizontais</label>
+            <label class="smallNote" style="color: var(--text-secondary);">Linhas Horizontais</label>
             <div class="row" style="margin-top: 0.5rem;">
               <div style="flex: 1;">
-                <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Largura (px)</label>
-                <input type="number" id="insp-tableHLineWidth" value="${p.customLayout?.hLineWidth || 1}" min="0" max="10" step="0.1" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Largura (px)</label>
+                <input type="number" id="insp-tableHLineWidth" value="${p.customLayout?.hLineWidth || 1}" min="0" max="10" step="0.1" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
               </div>
               <div style="flex: 1;">
-                <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Cor</label>
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Cor</label>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                   <input type="color" id="insp-tableHLineColor" value="${p.customLayout?.hLineColor || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
-                  <input type="text" id="insp-tableHLineColorText" value="${p.customLayout?.hLineColor || '#000000'}" placeholder="#000000" style="flex: 1; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                  <input type="text" id="insp-tableHLineColorText" value="${p.customLayout?.hLineColor || '#000000'}" placeholder="#000000" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                 </div>
               </div>
             </div>
           </div>
           
           <div style="margin-bottom: 1rem;">
-            <label class="smallNote" style="color: #d1d5db;">Linhas Verticais</label>
+            <label class="smallNote" style="color: var(--text-secondary);">Linhas Verticais</label>
             <div class="row" style="margin-top: 0.5rem;">
               <div style="flex: 1;">
-                <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Largura (px)</label>
-                <input type="number" id="insp-tableVLineWidth" value="${p.customLayout?.vLineWidth || 1}" min="0" max="10" step="0.1" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Largura (px)</label>
+                <input type="number" id="insp-tableVLineWidth" value="${p.customLayout?.vLineWidth || 1}" min="0" max="10" step="0.1" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
               </div>
               <div style="flex: 1;">
-                <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Cor</label>
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Cor</label>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                   <input type="color" id="insp-tableVLineColor" value="${p.customLayout?.vLineColor || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
-                  <input type="text" id="insp-tableVLineColorText" value="${p.customLayout?.vLineColor || '#000000'}" placeholder="#000000" style="flex: 1; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                  <input type="text" id="insp-tableVLineColorText" value="${p.customLayout?.vLineColor || '#000000'}" placeholder="#000000" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                 </div>
               </div>
             </div>
           </div>
           
           <div style="margin-bottom: 1rem;">
-            <label class="smallNote" style="color: #d1d5db;">Padding das Células</label>
+            <label class="smallNote" style="color: var(--text-secondary);">Padding das Células</label>
             <div class="row" style="margin-top: 0.5rem;">
               <div style="flex: 1;">
-                <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Esquerda</label>
-                <input type="number" id="insp-tablePaddingLeft" value="${p.customLayout?.paddingLeft || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Esquerda</label>
+                <input type="number" id="insp-tablePaddingLeft" value="${p.customLayout?.paddingLeft || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
               </div>
               <div style="flex: 1;">
-                <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Direita</label>
-                <input type="number" id="insp-tablePaddingRight" value="${p.customLayout?.paddingRight || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Direita</label>
+                <input type="number" id="insp-tablePaddingRight" value="${p.customLayout?.paddingRight || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
               </div>
             </div>
             <div class="row" style="margin-top: 0.5rem;">
               <div style="flex: 1;">
-                <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Topo</label>
-                <input type="number" id="insp-tablePaddingTop" value="${p.customLayout?.paddingTop || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Topo</label>
+                <input type="number" id="insp-tablePaddingTop" value="${p.customLayout?.paddingTop || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
               </div>
               <div style="flex: 1;">
-                <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Inferior</label>
-                <input type="number" id="insp-tablePaddingBottom" value="${p.customLayout?.paddingBottom || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Inferior</label>
+                <input type="number" id="insp-tablePaddingBottom" value="${p.customLayout?.paddingBottom || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
               </div>
             </div>
           </div>
           
           <div style="margin-bottom: 1rem;">
-            <label class="smallNote" style="color: #d1d5db;">Estilos de Linhas (Dashed)</label>
+            <label class="smallNote" style="color: var(--text-secondary);">Estilos de Linhas (Dashed)</label>
             <div class="row" style="margin-top: 0.5rem;">
               <div style="flex: 1;">
                 <label><input type="checkbox" id="insp-tableHLineStyle" ${p.customLayout?.hLineStyle ? 'checked' : ''}> Linhas Horizontais Tracejadas</label>
-                <div class="smallNote" style="margin-top: 0.25rem; color: #d1d5db; font-size: 0.75rem;">
+                <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
                   Aplica estilo tracejado nas linhas horizontais
                 </div>
               </div>
               <div style="flex: 1;">
                 <label><input type="checkbox" id="insp-tableVLineStyle" ${p.customLayout?.vLineStyle ? 'checked' : ''}> Linhas Verticais Tracejadas</label>
-                <div class="smallNote" style="margin-top: 0.25rem; color: #d1d5db; font-size: 0.75rem;">
+                <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
                   Aplica estilo tracejado nas linhas verticais
                 </div>
               </div>
@@ -6493,10 +6493,10 @@
           </div>
           
           <div style="margin-bottom: 1rem;">
-            <label class="smallNote" style="color: #d1d5db;">Borda Padrão (defaultBorder)</label>
+            <label class="smallNote" style="color: var(--text-secondary);">Borda Padrão (defaultBorder)</label>
             <div style="margin-top: 0.5rem;">
               <label><input type="checkbox" id="insp-tableDefaultBorder" ${p.customLayout?.defaultBorder !== false ? 'checked' : ''}> Usar Bordas Padrão</label>
-              <div class="smallNote" style="margin-top: 0.25rem; color: #d1d5db; font-size: 0.75rem;">
+              <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
                 Se desmarcado, apenas células com border definido terão bordas
               </div>
             </div>
@@ -6504,40 +6504,40 @@
         </div>
         ` : ''}
         
-        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #374151;">
-          <label style="font-weight: 500; margin-bottom: 0.75rem; color: #f3f4f6;">Tabela Zebrada</label>
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Tabela Zebrada</label>
           <div style="margin-bottom: 1rem;">
             <label><input type="checkbox" id="insp-tableZebraEnabled" ${p.zebraEnabled ? 'checked' : ''}> Ativar Tabela Zebrada</label>
-            <div class="smallNote" style="margin-top: 0.5rem; color: #d1d5db; font-size: 0.75rem;">
+            <div class="smallNote" style="margin-top: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
               Alterna cores de fundo entre linhas para facilitar a leitura
             </div>
           </div>
           
           ${p.zebraEnabled ? `
-          <div id="tableZebraOptions" style="margin-top: 1rem; padding: 1rem; background: #1f2937; border: 1px solid #374151; border-radius: 0.375rem;">
+          <div id="tableZebraOptions" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
             <div style="margin-bottom: 1rem;">
-              <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Cor Base (linhas pares)</label>
+              <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Cor Base (linhas pares)</label>
               <div style="display: flex; gap: 0.5rem; align-items: center;">
                 <input type="color" id="insp-tableZebraColor" value="${p.zebraColor || '#CCCCCC'}" style="width: 50px; height: 32px; cursor: pointer;">
-                <input type="text" id="insp-tableZebraColorText" value="${p.zebraColor || '#CCCCCC'}" placeholder="#CCCCCC" style="flex: 1; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                <input type="text" id="insp-tableZebraColorText" value="${p.zebraColor || '#CCCCCC'}" placeholder="#CCCCCC" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
               </div>
-              <div class="smallNote" style="margin-top: 0.5rem; color: #d1d5db; font-size: 0.75rem;">
+              <div class="smallNote" style="margin-top: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
                 A cor das linhas ímpares será gerada automaticamente com 50% de opacidade
               </div>
             </div>
             
             <div style="margin-bottom: 1rem;">
               <label><input type="checkbox" id="insp-tableZebraWithLines" ${p.zebraWithLines !== false ? 'checked' : ''}> Mostrar Linhas Horizontais</label>
-              <div class="smallNote" style="margin-top: 0.5rem; color: #d1d5db; font-size: 0.75rem;">
+              <div class="smallNote" style="margin-top: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
                 Adiciona linhas horizontais entre as linhas da tabela
               </div>
             </div>
           </div>
           ` : ''}
         </div>
-        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #374151;">
-          <label style="font-weight: 500; margin-bottom: 0.75rem; color: #f3f4f6;">Estilos das Células</label>
-          <div class="smallNote" style="margin-bottom: 0.75rem; color: #d1d5db; font-size: 0.75rem;">
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Estilos das Células</label>
+          <div class="smallNote" style="margin-bottom: 0.75rem; color: var(--text-tertiary); font-size: 0.75rem;">
             Configure cores de fundo e texto para as células da tabela. A primeira linha é o cabeçalho.
           </div>
           
@@ -6550,30 +6550,30 @@
           const cellFillOpacity = cell.fillOpacity !== undefined ? cell.fillOpacity : 1;
 
           return `
-                <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: #1f2937; border: 1px solid #374151; border-radius: 0.375rem;">
-                  <label style="font-weight: 500; color: #f3f4f6; margin-bottom: 0.5rem; display: block;">
+                <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
+                  <label style="font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem; display: block;">
                     ${isHeader ? '🔵' : '⚪'} ${isHeader ? 'Cabeçalho' : 'Linha'} ${rowIdx + 1}, Coluna ${colIdx + 1}
                   </label>
                   
                   <div style="margin-bottom: 0.5rem;">
-                    <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Cor de Fundo (fillColor)</label>
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Cor de Fundo (fillColor)</label>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                       <input type="color" class="table-cell-fill-color" data-row="${rowIdx}" data-col="${colIdx}" value="${cellFillColor || '#ffffff'}" style="width: 50px; height: 32px; cursor: pointer;">
-                      <input type="text" class="table-cell-fill-color-text" data-row="${rowIdx}" data-col="${colIdx}" value="${cellFillColor || ''}" placeholder="Deixe vazio para transparente" style="flex: 1; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                      <input type="text" class="table-cell-fill-color-text" data-row="${rowIdx}" data-col="${colIdx}" value="${cellFillColor || ''}" placeholder="Deixe vazio para transparente" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                     </div>
                   </div>
                   
                   <div style="margin-bottom: 0.5rem;">
-                    <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Cor do Texto (color)</label>
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Cor do Texto (color)</label>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                       <input type="color" class="table-cell-color" data-row="${rowIdx}" data-col="${colIdx}" value="${cellColor || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
-                      <input type="text" class="table-cell-color-text" data-row="${rowIdx}" data-col="${colIdx}" value="${cellColor || ''}" placeholder="Deixe vazio para cor padrão" style="flex: 1; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                      <input type="text" class="table-cell-color-text" data-row="${rowIdx}" data-col="${colIdx}" value="${cellColor || ''}" placeholder="Deixe vazio para cor padrão" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                     </div>
                   </div>
                   
                   <div>
-                    <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Opacidade do Fundo (fillOpacity)</label>
-                    <input type="number" class="table-cell-fill-opacity" data-row="${rowIdx}" data-col="${colIdx}" value="${cellFillOpacity}" min="0" max="1" step="0.1" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Opacidade do Fundo (fillOpacity)</label>
+                    <input type="number" class="table-cell-fill-opacity" data-row="${rowIdx}" data-col="${colIdx}" value="${cellFillOpacity}" min="0" max="1" step="0.1" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                   </div>
                 </div>
               `;
@@ -6593,8 +6593,8 @@
             </div>
           </div>
         </div>
-        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #374151;">
-          <label style="font-weight: 500; margin-bottom: 0.75rem; color: #f3f4f6;">Larguras das Colunas</label>
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Larguras das Colunas</label>
           ${Array.from({ length: numCols }, (_, idx) => {
         const widths = p.widths || [];
         const width = widths[idx] || '*';
@@ -6614,32 +6614,32 @@
         }
 
         return `
-              <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: #1f2937; border: 1px solid #374151; border-radius: 0.375rem;">
+              <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                  <label style="font-weight: 500; color: #f3f4f6;">Coluna ${idx + 1}</label>
+                  <label style="font-weight: 500; color: var(--text-primary);">Coluna ${idx + 1}</label>
                   ${idx > 0 ? `
                     <button type="button" class="btn-delete-table-col" data-col-index="${idx}" style="padding: 0.25rem 0.5rem; background: #ef4444; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">🗑️</button>
                   ` : ''}
                 </div>
                 <div class="row">
                   <div style="flex: 1;">
-                    <label class="smallNote" style="color: #d1d5db;">Tipo de Largura</label>
-                    <select class="table-col-width-type" data-col-index="${idx}" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                    <label class="smallNote" style="color: var(--text-secondary);">Tipo de Largura</label>
+                    <select class="table-col-width-type" data-col-index="${idx}" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                       <option value="auto" ${widthType === 'auto' ? 'selected' : ''}>Automático (*)</option>
                       <option value="pixels" ${widthType === 'pixels' ? 'selected' : ''}>Pixels (px)</option>
                       <option value="percentage" ${widthType === 'percentage' ? 'selected' : ''}>Porcentagem (%)</option>
                     </select>
                   </div>
                   <div style="flex: 1; ${widthType === 'auto' ? 'display: none;' : ''}" id="table-col-width-value-${idx}">
-                    <label class="smallNote" style="color: #d1d5db;">Valor</label>
-                    <input type="number" class="table-col-width-value" data-col-index="${idx}" value="${widthValue}" min="0" step="${widthType === 'percentage' ? '1' : '1'}" placeholder="${widthType === 'percentage' ? '50' : '100'}" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                    <label class="smallNote" style="color: var(--text-secondary);">Valor</label>
+                    <input type="number" class="table-col-width-value" data-col-index="${idx}" value="${widthValue}" min="0" step="${widthType === 'percentage' ? '1' : '1'}" placeholder="${widthType === 'percentage' ? '50' : '100'}" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                   </div>
                 </div>
               </div>
             `;
       }).join('')}
-          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: #d1d5db;">
-            <strong style="color: #f3f4f6;">Tipos de largura:</strong><br>
+          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">
+            <strong style="color: var(--text-primary);">Tipos de largura:</strong><br>
             • Automático (*): divide o espaço igualmente entre as colunas<br>
             • Pixels: largura fixa em pontos (ex: 100, 200)<br>
             • Porcentagem: largura em % do espaço disponível (ex: 30, 50)
@@ -6666,22 +6666,22 @@
           </div>
           ${p.heights && Array.isArray(p.heights) ? `
           <div style="margin-top: 1rem;">
-            <label class="smallNote" style="color: #d1d5db; margin-bottom: 0.5rem; display: block;">Alturas por Linha</label>
+            <label class="smallNote" style="color: var(--text-secondary); margin-bottom: 0.5rem; display: block;">Alturas por Linha</label>
             ${Array.from({ length: numRows }, (_, idx) => {
         const height = p.heights[idx] || 40;
         return `
                 <div style="margin-bottom: 0.5rem;">
-                  <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">Linha ${idx + 1}</label>
-                  <input type="number" class="table-row-height" data-row="${idx}" value="${height}" min="0" step="1" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                  <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Linha ${idx + 1}</label>
+                  <input type="number" class="table-row-height" data-row="${idx}" value="${height}" min="0" step="1" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
                 </div>
               `;
       }).join('')}
           </div>
           ` : ''}
         </div>
-        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #374151;">
-          <label style="font-weight: 500; margin-bottom: 0.75rem; color: #f3f4f6;">Propriedades Avançadas das Células</label>
-          <div class="smallNote" style="margin-bottom: 0.75rem; color: #d1d5db; font-size: 0.75rem;">
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Propriedades Avançadas das Células</label>
+          <div class="smallNote" style="margin-bottom: 0.75rem; color: var(--text-tertiary); font-size: 0.75rem;">
             Configure rowSpan, colSpan, border e borderColor para células individuais.
           </div>
           
@@ -6695,61 +6695,61 @@
           const borderColor = cell.borderColor || ['', '', '', ''];
 
           return `
-                <div style="margin-bottom: 1rem; padding: 0.75rem; background: #1f2937; border: 1px solid #374151; border-radius: 0.375rem;">
-                  <label style="font-weight: 500; color: #f3f4f6; margin-bottom: 0.75rem; display: block;">
+                <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
+                  <label style="font-weight: 500; color: var(--text-primary); margin-bottom: 0.75rem; display: block;">
                     ${isHeader ? '🔵' : '⚪'} ${isHeader ? 'Cabeçalho' : 'Linha'} ${rowIdx + 1}, Coluna ${colIdx + 1}
                   </label>
                   
                   <div class="row" style="margin-bottom: 0.75rem;">
                     <div style="flex: 1;">
-                      <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">rowSpan</label>
-                      <input type="number" class="table-cell-rowspan" data-row="${rowIdx}" data-col="${colIdx}" value="${rowSpan}" min="1" max="10" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                      <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">rowSpan</label>
+                      <input type="number" class="table-cell-rowspan" data-row="${rowIdx}" data-col="${colIdx}" value="${rowSpan}" min="1" max="10" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
             </div>
                     <div style="flex: 1;">
-                      <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem;">colSpan</label>
-                      <input type="number" class="table-cell-colspan" data-row="${rowIdx}" data-col="${colIdx}" value="${colSpan}" min="1" max="10" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+                      <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">colSpan</label>
+                      <input type="number" class="table-cell-colspan" data-row="${rowIdx}" data-col="${colIdx}" value="${colSpan}" min="1" max="10" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
             </div>
                   </div>
                   
                   <div style="margin-bottom: 0.75rem;">
-                    <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Bordas (border) - [esquerda, topo, direita, inferior]</label>
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Bordas (border) - [esquerda, topo, direita, inferior]</label>
                     <div class="row">
                       <div style="flex: 1;">
-                        <label class="smallNote" style="color: #d1d5db; font-size: 0.7rem;">Esquerda</label>
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Esquerda</label>
                         <input type="checkbox" class="table-cell-border" data-row="${rowIdx}" data-col="${colIdx}" data-side="0" ${border[0] ? 'checked' : ''} style="width: 100%;">
                       </div>
                       <div style="flex: 1;">
-                        <label class="smallNote" style="color: #d1d5db; font-size: 0.7rem;">Topo</label>
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Topo</label>
                         <input type="checkbox" class="table-cell-border" data-row="${rowIdx}" data-col="${colIdx}" data-side="1" ${border[1] ? 'checked' : ''} style="width: 100%;">
                       </div>
                       <div style="flex: 1;">
-                        <label class="smallNote" style="color: #d1d5db; font-size: 0.7rem;">Direita</label>
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Direita</label>
                         <input type="checkbox" class="table-cell-border" data-row="${rowIdx}" data-col="${colIdx}" data-side="2" ${border[2] ? 'checked' : ''} style="width: 100%;">
                       </div>
                       <div style="flex: 1;">
-                        <label class="smallNote" style="color: #d1d5db; font-size: 0.7rem;">Inferior</label>
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Inferior</label>
                         <input type="checkbox" class="table-cell-border" data-row="${rowIdx}" data-col="${colIdx}" data-side="3" ${border[3] ? 'checked' : ''} style="width: 100%;">
                       </div>
                     </div>
                   </div>
                   
                   <div>
-                    <label class="smallNote" style="color: #d1d5db; font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Cores das Bordas (borderColor) - [esquerda, topo, direita, inferior]</label>
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Cores das Bordas (borderColor) - [esquerda, topo, direita, inferior]</label>
                     <div class="row">
                       <div style="flex: 1;">
-                        <label class="smallNote" style="color: #d1d5db; font-size: 0.7rem;">Esquerda</label>
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Esquerda</label>
                         <input type="color" class="table-cell-border-color" data-row="${rowIdx}" data-col="${colIdx}" data-side="0" value="${borderColor[0] || '#000000'}" style="width: 100%; height: 32px; cursor: pointer;">
                       </div>
                       <div style="flex: 1;">
-                        <label class="smallNote" style="color: #d1d5db; font-size: 0.7rem;">Topo</label>
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Topo</label>
                         <input type="color" class="table-cell-border-color" data-row="${rowIdx}" data-col="${colIdx}" data-side="1" value="${borderColor[1] || '#000000'}" style="width: 100%; height: 32px; cursor: pointer;">
                       </div>
                       <div style="flex: 1;">
-                        <label class="smallNote" style="color: #d1d5db; font-size: 0.7rem;">Direita</label>
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Direita</label>
                         <input type="color" class="table-cell-border-color" data-row="${rowIdx}" data-col="${colIdx}" data-side="2" value="${borderColor[2] || '#000000'}" style="width: 100%; height: 32px; cursor: pointer;">
                       </div>
                       <div style="flex: 1;">
-                        <label class="smallNote" style="color: #d1d5db; font-size: 0.7rem;">Inferior</label>
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Inferior</label>
                         <input type="color" class="table-cell-border-color" data-row="${rowIdx}" data-col="${colIdx}" data-side="3" value="${borderColor[3] || '#000000'}" style="width: 100%; height: 32px; cursor: pointer;">
                       </div>
                     </div>
