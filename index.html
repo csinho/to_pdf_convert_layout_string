@@ -1345,7 +1345,7 @@
       background: var(--bg-secondary);
     }
 
-    #tabContentCode > div:first-child {
+    #tabContentCode>div:first-child {
       padding: 1rem;
       border-bottom: 1px solid var(--border-color);
     }
@@ -1710,21 +1710,23 @@
     }
 
     .code-instructions {
-      background: var(--bg-secondary);
-      border-radius: 0.375rem;
       padding: 0.75rem 1rem;
       margin: 0 1rem 1rem 1rem;
       font-size: 0.75rem;
+      background: #dbeafe;
+      border-left: 3px solid #2563eb;
+      border-radius: 0.25rem;
+      color: #071c5f;
     }
 
     .code-instructions p {
-      color: #9ca3af;
+      color: #1e40af;
       margin-bottom: 0.5rem;
     }
 
     .code-instructions ol {
       list-style-position: inside;
-      color: #d1d5db;
+      color: #1e40af;
     }
 
     .code-instructions li {
@@ -2124,14 +2126,21 @@
 
           <!--<button class="btn primary" id="previewBtn">Pré-visualizar PDF</button>-->
           <button class="btn" id="loadTemplateBtn" title="Carregar template salvo">📂 Carregar Template</button>
-          <button class="btn" id="bubbleTestBtn"  title="Pré-visualizar PDF" style="display: none;">
-            <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 20 20" style="enable-background:new 0 0 512 512;" xml:space="preserve" width="20" height="20">
-              <path style="fill:#F4B2B0;" points="337.393,15.391 333.585,15.391 333.585,121.536 451.215,121.536 " d="M13.179 0.601h-0.149v4.146h4.595Z"/>
-              <path style="fill:#B3404A;" d="M17.725 7.949a0.6 0.6 0 0 0 -0.601 0.601v10.248H2.875V1.203h9.554v3.545c0 0.332 0.269 0.601 0.601 0.601h4.595a0.601 0.601 0 0 0 0.41 -1.041L13.589 0.161l-0.015 -0.012 -0.021 -0.018 -0.023 -0.017 -0.024 -0.017 -0.023 -0.014 -0.027 -0.015 -0.022 -0.011 -0.031 -0.014 -0.021 -0.008 -0.033 -0.011 -0.023 -0.006 -0.032 -0.008 -0.03 -0.005 -0.027 -0.004A0.667 0.667 0 0 0 13.179 0H2.275a0.6 0.6 0 0 0 -0.601 0.601v18.797c0 0.332 0.269 0.601 0.601 0.601h15.451a0.6 0.6 0 0 0 0.601 -0.601V8.55a0.6 0.6 0 0 0 -0.601 -0.601M13.632 4.147V1.845l2.467 2.301z"/>
-              <path style="fill:#F4B2B0;" cx="255.44" cy="270.754" r="98.532" d="M13.827 10.576a3.849 3.849 0 0 1 -3.849 3.849 3.849 3.849 0 0 1 -3.849 -3.849 3.849 3.849 0 0 1 7.698 0"/>
+          <button class="btn" id="bubbleTestBtn" title="Pré-visualizar PDF" style="display: none;">
+            <svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg"
+              xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 20 20"
+              style="enable-background:new 0 0 512 512;" xml:space="preserve" width="20" height="20">
+              <path style="fill:#F4B2B0;" points="337.393,15.391 333.585,15.391 333.585,121.536 451.215,121.536 "
+                d="M13.179 0.601h-0.149v4.146h4.595Z" />
+              <path style="fill:#B3404A;"
+                d="M17.725 7.949a0.6 0.6 0 0 0 -0.601 0.601v10.248H2.875V1.203h9.554v3.545c0 0.332 0.269 0.601 0.601 0.601h4.595a0.601 0.601 0 0 0 0.41 -1.041L13.589 0.161l-0.015 -0.012 -0.021 -0.018 -0.023 -0.017 -0.024 -0.017 -0.023 -0.014 -0.027 -0.015 -0.022 -0.011 -0.031 -0.014 -0.021 -0.008 -0.033 -0.011 -0.023 -0.006 -0.032 -0.008 -0.03 -0.005 -0.027 -0.004A0.667 0.667 0 0 0 13.179 0H2.275a0.6 0.6 0 0 0 -0.601 0.601v18.797c0 0.332 0.269 0.601 0.601 0.601h15.451a0.6 0.6 0 0 0 0.601 -0.601V8.55a0.6 0.6 0 0 0 -0.601 -0.601M13.632 4.147V1.845l2.467 2.301z" />
+              <path style="fill:#F4B2B0;" cx="255.44" cy="270.754" r="98.532"
+                d="M13.827 10.576a3.849 3.849 0 0 1 -3.849 3.849 3.849 3.849 0 0 1 -3.849 -3.849 3.849 3.849 0 0 1 7.698 0" />
               <g>
-                <path style="fill:#B3404A;" d="M9.978 15.025a4.44 4.44 0 0 1 -3.147 -1.301c-1.735 -1.735 -1.735 -4.559 0 -6.293s4.558 -1.735 6.293 0a4.453 4.453 0 0 1 0 6.293 4.44 4.44 0 0 1 -3.147 1.301m0 -7.694a3.24 3.24 0 0 0 -2.297 0.95c-1.266 1.266 -1.266 3.327 0 4.593s3.327 1.266 4.593 0a3.253 3.253 0 0 0 0 -4.593 3.24 3.24 0 0 0 -2.297 -0.95"/>
-                <path style="fill:#B3404A;" d="M15.08 16.28a0.6 0.6 0 0 1 -0.425 -0.176l-2.381 -2.381a0.601 0.601 0 0 1 0.85 -0.85l2.381 2.381a0.6 0.6 0 0 1 0 0.85 0.6 0.6 0 0 1 -0.425 0.176"/>
+                <path style="fill:#B3404A;"
+                  d="M9.978 15.025a4.44 4.44 0 0 1 -3.147 -1.301c-1.735 -1.735 -1.735 -4.559 0 -6.293s4.558 -1.735 6.293 0a4.453 4.453 0 0 1 0 6.293 4.44 4.44 0 0 1 -3.147 1.301m0 -7.694a3.24 3.24 0 0 0 -2.297 0.95c-1.266 1.266 -1.266 3.327 0 4.593s3.327 1.266 4.593 0a3.253 3.253 0 0 0 0 -4.593 3.24 3.24 0 0 0 -2.297 -0.95" />
+                <path style="fill:#B3404A;"
+                  d="M15.08 16.28a0.6 0.6 0 0 1 -0.425 -0.176l-2.381 -2.381a0.601 0.601 0 0 1 0.85 -0.85l2.381 2.381a0.6 0.6 0 0 1 0 0.85 0.6 0.6 0 0 1 -0.425 0.176" />
               </g>
             </svg>
           </button>
@@ -2326,12 +2335,20 @@
       <div class="code-header" id="codePanelHeader">
         <div class="header-top">
           <div class="element-type-title" id="elementTypeTitle">Tipo</div>
-            <button class="close-panel-btn" id="closePanelBtn" onclick="closePanel()" title="Fechar painel">
-              <svg width="12" height="15" viewBox="0 0 0.72 0.72" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" style="display: block !important; fill: #ef4444 !important; visibility: visible !important; opacity: 1 !important; width: 24px !important; height: 24px !important; overflow: visible !important;">
-                <path d="M0.614 0.105a0.359 0.359 0 0 0 -0.255 -0.105C0.161 0 0 0.161 0 0.36c0 0.099 0.04 0.189 0.105 0.255A0.359 0.359 0 0 0 0.36 0.72c0.199 0 0.36 -0.161 0.36 -0.36 0 -0.099 -0.04 -0.189 -0.105 -0.255m-0.046 0.463a0.294 0.294 0 0 1 -0.208 0.086c-0.163 0 -0.295 -0.132 -0.295 -0.295a0.294 0.294 0 0 1 0.086 -0.208 0.294 0.294 0 0 1 0.208 -0.086c0.163 0 0.295 0.132 0.295 0.295a0.294 0.294 0 0 1 -0.086 0.208z" fill="#ef4444" style="fill: #ef4444 !important; visibility: visible !important; opacity: 1 !important; stroke: none !important;"/>
-                <path d="m0.406 0.36 0.116 -0.116a0.033 0.033 0 0 0 -0.046 -0.046l0 0 -0.116 0.116 -0.116 -0.116A0.033 0.033 0 0 0 0.198 0.244l0 0 0.116 0.116 -0.116 0.116a0.033 0.033 0 1 0 0.046 0.046l0 0 0.116 -0.116 0.116 0.116a0.033 0.033 0 1 0 0.046 -0.046l0 0z" fill="#ef4444" style="fill: #ef4444 !important; visibility: visible !important; opacity: 1 !important; stroke: none !important;"/>
-              </svg>
-            </button>
+          <button class="close-panel-btn" id="closePanelBtn" onclick="closePanel()" title="Fechar painel">
+            <svg width="12" height="15" viewBox="0 0 0.72 0.72" xmlns="http://www.w3.org/2000/svg"
+              preserveAspectRatio="xMidYMid meet"
+              style="display: block !important; fill: #ef4444 !important; visibility: visible !important; opacity: 1 !important; width: 24px !important; height: 24px !important; overflow: visible !important;">
+              <path
+                d="M0.614 0.105a0.359 0.359 0 0 0 -0.255 -0.105C0.161 0 0 0.161 0 0.36c0 0.099 0.04 0.189 0.105 0.255A0.359 0.359 0 0 0 0.36 0.72c0.199 0 0.36 -0.161 0.36 -0.36 0 -0.099 -0.04 -0.189 -0.105 -0.255m-0.046 0.463a0.294 0.294 0 0 1 -0.208 0.086c-0.163 0 -0.295 -0.132 -0.295 -0.295a0.294 0.294 0 0 1 0.086 -0.208 0.294 0.294 0 0 1 0.208 -0.086c0.163 0 0.295 0.132 0.295 0.295a0.294 0.294 0 0 1 -0.086 0.208z"
+                fill="#ef4444"
+                style="fill: #ef4444 !important; visibility: visible !important; opacity: 1 !important; stroke: none !important;" />
+              <path
+                d="m0.406 0.36 0.116 -0.116a0.033 0.033 0 0 0 -0.046 -0.046l0 0 -0.116 0.116 -0.116 -0.116A0.033 0.033 0 0 0 0.198 0.244l0 0 0.116 0.116 -0.116 0.116a0.033 0.033 0 1 0 0.046 0.046l0 0 0.116 -0.116 0.116 0.116a0.033 0.033 0 1 0 0.046 -0.046l0 0z"
+                fill="#ef4444"
+                style="fill: #ef4444 !important; visibility: visible !important; opacity: 1 !important; stroke: none !important;" />
+            </svg>
+          </button>
 
 
         </div>
@@ -5863,7 +5880,7 @@
       `;
 
       inspector.innerHTML = html;
-      
+
       // Forçar visibilidade do inspector após renderizar
       if (inspector) {
         inspector.style.display = 'block';
@@ -5955,7 +5972,7 @@
         <div class="inspector-field">
           <label class="smallNote">Font Features (fontFeatures)</label>
           <input type="text" id="insp-fontFeatures" value="${p.fontFeatures ? p.fontFeatures.join(', ') : ''}" placeholder="Ex: kern, liga, smcp (separados por vírgula)">
-          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Features tipográficas avançadas (dependem da fonte TTF). Separe por vírgula.</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Features tipográficas avançadas (dependem da fonte TTF). Separe por vírgula.</div>
         </div>
         <div class="inspector-field">
           <div class="row">
@@ -6000,10 +6017,16 @@
         <div class="inspector-field">
           <div class="row">
             <div>
-              <label><input type="checkbox" id="insp-bold" ${p.bold ? 'checked' : ''}> Negrito</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-bold" ${p.bold ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Negrito</span>
+              </label>
             </div>
             <div>
-              <label><input type="checkbox" id="insp-italics" ${p.italics ? 'checked' : ''}> Itálico</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-italics" ${p.italics ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Itálico</span>
+              </label>
             </div>
           </div>
         </div>
@@ -6012,12 +6035,12 @@
             <div>
               <label class="smallNote">Altura da Linha (lineHeight)</label>
               <input type="number" id="insp-lineHeight" value="${p.lineHeight || ''}" placeholder="Auto" min="0" max="10" step="0.1">
-              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Deixe vazio para automático</div>
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Deixe vazio para automático</div>
             </div>
             <div>
               <label class="smallNote">Espaçamento entre Caracteres</label>
               <input type="number" id="insp-characterSpacing" value="${p.characterSpacing || ''}" placeholder="0" min="0" max="10" step="0.1">
-              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Em unidades (0 = normal)</div>
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Em unidades (0 = normal)</div>
             </div>
           </div>
         </div>
@@ -6110,7 +6133,7 @@
         <div class="inspector-field">
           <label class="smallNote">Font Features (fontFeatures)</label>
           <input type="text" id="insp-headerFontFeatures" value="${p.fontFeatures ? p.fontFeatures.join(', ') : ''}" placeholder="Ex: kern, liga, smcp (separados por vírgula)">
-          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Features tipográficas avançadas (dependem da fonte TTF). Separe por vírgula.</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Features tipográficas avançadas (dependem da fonte TTF). Separe por vírgula.</div>
         </div>
         <div class="inspector-field">
           <div class="row">
@@ -6154,10 +6177,16 @@
         <div class="inspector-field">
           <div class="row">
             <div>
-              <label><input type="checkbox" id="insp-headerBold" ${p.bold ? 'checked' : ''}> Negrito</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-headerBold" ${p.bold ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Negrito</span>
+              </label>
             </div>
             <div>
-              <label><input type="checkbox" id="insp-headerItalics" ${p.italics ? 'checked' : ''}> Itálico</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-headerItalics" ${p.italics ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Itálico</span>
+              </label>
             </div>
           </div>
         </div>
@@ -6166,12 +6195,12 @@
             <div>
               <label class="smallNote">Altura da Linha (lineHeight)</label>
               <input type="number" id="insp-headerLineHeight" value="${p.lineHeight || ''}" placeholder="Auto" min="0" max="10" step="0.1">
-              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Deixe vazio para automático</div>
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Deixe vazio para automático</div>
             </div>
             <div>
               <label class="smallNote">Espaçamento entre Caracteres</label>
               <input type="number" id="insp-headerCharacterSpacing" value="${p.characterSpacing || ''}" placeholder="0" min="0" max="10" step="0.1">
-              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Em unidades (0 = normal)</div>
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Em unidades (0 = normal)</div>
             </div>
           </div>
         </div>
@@ -6223,7 +6252,7 @@
             <option value="center" ${p.valign === 'center' ? 'selected' : ''}>Centro</option>
             <option value="bottom" ${p.valign === 'bottom' ? 'selected' : ''}>Inferior</option>
           </select>
-          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Alinhamento vertical do conteúdo dentro das colunas</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Alinhamento vertical do conteúdo dentro das colunas</div>
         </div>
         <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
           <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Larguras das Colunas</label>
@@ -6256,16 +6285,16 @@
             </div>
                 <div class="row">
                   <div style="flex: 1;">
-                    <label class="smallNote" style="color: var(--text-secondary);">Tipo de Largura</label>
-                    <select class="col-width-type" data-col-index="${idx}" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                    <label class="smallNote">Tipo de Largura</label>
+                    <select class="col-width-type" data-col-index="${idx}">
                       <option value="auto" ${widthType === 'auto' ? 'selected' : ''}>Automático (*)</option>
                       <option value="pixels" ${widthType === 'pixels' ? 'selected' : ''}>Pixels (px)</option>
                       <option value="percentage" ${widthType === 'percentage' ? 'selected' : ''}>Porcentagem (%)</option>
                     </select>
               </div>
                   <div style="flex: 1; ${widthType === 'auto' ? 'display: none;' : ''}" id="col-width-value-${idx}">
-                    <label class="smallNote" style="color: var(--text-secondary);">Valor</label>
-                    <input type="number" class="col-width-value" data-col-index="${idx}" value="${widthValue}" min="0" step="${widthType === 'percentage' ? '1' : '1'}" placeholder="${widthType === 'percentage' ? '50' : '100'}" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                    <label class="smallNote">Valor</label>
+                    <input type="number" class="col-width-value" data-col-index="${idx}" value="${widthValue}" min="0" step="${widthType === 'percentage' ? '1' : '1'}" placeholder="${widthType === 'percentage' ? '50' : '100'}">
               </div>
             </div>
             </div>
@@ -6368,7 +6397,7 @@
 
       return `
         <div class="inspector-field">
-          <div class="smallNote" style="padding: 0.75rem; background: var(--bg-tertiary); border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: var(--text-primary);">
+          <div class="smallNote" style="padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: #1e40af;">
             <strong>📋 Estrutura da Tabela:</strong><br>
             • <strong>Linha 1</strong> = Cabeçalho (nomes das colunas)<br>
             • <strong>Linhas ${numRows > 1 ? '2-' + numRows : '2'}</strong> = Dados da tabela
@@ -6478,13 +6507,19 @@
             <label class="smallNote" style="color: var(--text-secondary);">Estilos de Linhas (Dashed)</label>
             <div class="row" style="margin-top: 0.5rem;">
               <div style="flex: 1;">
-                <label><input type="checkbox" id="insp-tableHLineStyle" ${p.customLayout?.hLineStyle ? 'checked' : ''}> Linhas Horizontais Tracejadas</label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="insp-tableHLineStyle" ${p.customLayout?.hLineStyle ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Linhas Horizontais Tracejadas</span>
+                </label>
                 <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
                   Aplica estilo tracejado nas linhas horizontais
                 </div>
               </div>
               <div style="flex: 1;">
-                <label><input type="checkbox" id="insp-tableVLineStyle" ${p.customLayout?.vLineStyle ? 'checked' : ''}> Linhas Verticais Tracejadas</label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="insp-tableVLineStyle" ${p.customLayout?.vLineStyle ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Linhas Verticais Tracejadas</span>
+                </label>
                 <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
                   Aplica estilo tracejado nas linhas verticais
                 </div>
@@ -6495,7 +6530,10 @@
           <div style="margin-bottom: 1rem;">
             <label class="smallNote" style="color: var(--text-secondary);">Borda Padrão (defaultBorder)</label>
             <div style="margin-top: 0.5rem;">
-              <label><input type="checkbox" id="insp-tableDefaultBorder" ${p.customLayout?.defaultBorder !== false ? 'checked' : ''}> Usar Bordas Padrão</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-tableDefaultBorder" ${p.customLayout?.defaultBorder !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Usar Bordas Padrão</span>
+              </label>
               <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
                 Se desmarcado, apenas células com border definido terão bordas
               </div>
@@ -6507,7 +6545,10 @@
         <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
           <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Tabela Zebrada</label>
           <div style="margin-bottom: 1rem;">
-            <label><input type="checkbox" id="insp-tableZebraEnabled" ${p.zebraEnabled ? 'checked' : ''}> Ativar Tabela Zebrada</label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+              <input type="checkbox" id="insp-tableZebraEnabled" ${p.zebraEnabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Ativar Tabela Zebrada</span>
+            </label>
             <div class="smallNote" style="margin-top: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
               Alterna cores de fundo entre linhas para facilitar a leitura
             </div>
@@ -6527,7 +6568,10 @@
             </div>
             
             <div style="margin-bottom: 1rem;">
-              <label><input type="checkbox" id="insp-tableZebraWithLines" ${p.zebraWithLines !== false ? 'checked' : ''}> Mostrar Linhas Horizontais</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-tableZebraWithLines" ${p.zebraWithLines !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Mostrar Linhas Horizontais</span>
+              </label>
               <div class="smallNote" style="margin-top: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
                 Adiciona linhas horizontais entre as linhas da tabela
               </div>
@@ -6583,7 +6627,10 @@
         <div class="inspector-field">
           <div class="row">
             <div>
-              <label><input type="checkbox" id="insp-tableDontBreakRows" ${p.dontBreakRows ? 'checked' : ''}> Não Quebrar Linhas</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-tableDontBreakRows" ${p.dontBreakRows ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Não Quebrar Linhas</span>
+              </label>
               <div class="smallNote">Previne quebra de linhas entre páginas</div>
             </div>
             <div>
@@ -6645,23 +6692,23 @@
             • Porcentagem: largura em % do espaço disponível (ex: 30, 50)
           </div>
         </div>
-        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #374151;">
-          <label style="font-weight: 500; margin-bottom: 0.75rem; color: #f3f4f6;">Altura das Linhas (heights)</label>
-          <div class="smallNote" style="margin-bottom: 0.75rem; color: #d1d5db; font-size: 0.75rem;">
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Altura das Linhas (heights)</label>
+          <div class="smallNote" style="margin-bottom: 0.75rem; color: var(--text-tertiary); font-size: 0.75rem;">
             Defina a altura das linhas da tabela. Pode ser um valor fixo para todas, um array por linha, ou uma função.
           </div>
           <div class="row">
             <div style="flex: 1;">
-              <label class="smallNote" style="color: #d1d5db;">Tipo</label>
-              <select id="insp-tableHeightsType" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+              <label class="smallNote">Tipo</label>
+              <select id="insp-tableHeightsType">
                 <option value="none" ${!p.heights ? 'selected' : ''}>Não Definir</option>
                 <option value="fixed" ${p.heights && typeof p.heights === 'number' ? 'selected' : ''}>Valor Fixo (todas as linhas)</option>
                 <option value="array" ${p.heights && Array.isArray(p.heights) ? 'selected' : ''}>Array (por linha)</option>
               </select>
             </div>
             <div style="flex: 1; ${!p.heights || typeof p.heights !== 'number' ? 'display: none;' : ''}" id="table-heights-fixed">
-              <label class="smallNote" style="color: #d1d5db;">Altura Fixa (px)</label>
-              <input type="number" id="insp-tableHeightsFixed" value="${p.heights && typeof p.heights === 'number' ? p.heights : 40}" min="0" step="1" style="width: 100%; padding: 0.5rem; background: #111827; color: #f3f4f6; border: 1px solid #374151; border-radius: 0.375rem; font-size: 0.875rem;">
+              <label class="smallNote">Altura Fixa (px)</label>
+              <input type="number" id="insp-tableHeightsFixed" value="${p.heights && typeof p.heights === 'number' ? p.heights : 40}" min="0" step="1">
             </div>
           </div>
           ${p.heights && Array.isArray(p.heights) ? `
@@ -6810,7 +6857,7 @@
                 <input type="number" id="insp-imageFitHeight" value="${Array.isArray(p.fit) ? p.fit[1] : (p.fit || 100)}" min="10" max="500">
               </div>
             </div>
-            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Ajusta a imagem mantendo a proporção</div>
+            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Ajusta a imagem mantendo a proporção</div>
           </div>
         </div>
         <div id="imageCoverOptions" style="${!useCover ? 'display: none;' : ''}">
@@ -6850,12 +6897,12 @@
         <div class="inspector-field">
           <label class="smallNote">Border Radius</label>
           <input type="number" id="insp-imageBorderRadius" value="${p.borderRadius || 0}" min="0" max="1000" step="1" placeholder="0">
-          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Apenas o número (ex: 30, 50, 100). 0 = sem arredondamento</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Apenas o número (ex: 30, 50, 100). 0 = sem arredondamento</div>
         </div>
         <div class="inspector-field">
           <label class="smallNote">Opacidade (0.0 - 1.0)</label>
           <input type="number" id="insp-imageOpacity" value="${p.opacity !== undefined ? p.opacity : ''}" placeholder="1.0" min="0" max="1" step="0.1">
-          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">1.0 = totalmente opaco, 0.0 = transparente</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">1.0 = totalmente opaco, 0.0 = transparente</div>
         </div>
         <div class="inspector-field">
           <label class="smallNote">Alinhamento</label>
@@ -6885,7 +6932,7 @@
                 <input type="number" id="insp-imageAbsoluteY" value="${p.absolutePosition?.y || 0}" min="0" step="1">
               </div>
             </div>
-            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Posição em pixels a partir do canto superior esquerdo da página</div>
+            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Posição em pixels a partir do canto superior esquerdo da página</div>
           </div>
         </div>
         <div id="imageRelativePositionOptions" style="${!useRelativePosition ? 'display: none;' : ''}">
@@ -6900,7 +6947,7 @@
                 <input type="number" id="insp-imageRelativeY" value="${p.relativePosition?.y || 0}" step="1">
               </div>
             </div>
-            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280;">Deslocamento relativo à posição atual no fluxo do documento</div>
+            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Deslocamento relativo à posição atual no fluxo do documento</div>
           </div>
         </div>
         ${renderMarginSection(element)}
@@ -6933,7 +6980,7 @@
               <input type="number" id="insp-marginBottom" value="${marginArray[3] || 0}" min="0" step="1">
             </div>
           </div>
-          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: #6b7280;">Formato PDFMake: [left, top, right, bottom]</div>
+          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">Formato PDFMake: [left, top, right, bottom]</div>
             </div>
           `;
     }
@@ -6943,8 +6990,8 @@
       const p = element.properties || {};
       const marginArray = p.margin || [0, 0, 0, 0];
       return `
-        <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
-          <label style="font-weight: 500; margin-bottom: 0.5rem;">Margens (px)</label>
+        <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">Margens (px)</label>
           <div class="row">
             <div>
               <label class="smallNote">Esquerda</label>
@@ -6963,7 +7010,7 @@
               <input type="number" class="margin-input" data-side="3" value="${marginArray[3] || 0}" min="0" step="1" placeholder="0">
             </div>
           </div>
-          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: #6b7280;">Formato: [left, top, right, bottom]</div>
+          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">Formato: [left, top, right, bottom]</div>
         </div>
       `;
     }
@@ -7036,13 +7083,10 @@
       return `
         <div class="inspector-field">
           <label>Código SVG</label>
-          <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">
-            <div style="font-size: 0.875rem; color: #0369a1; margin-bottom: 0.25rem; font-weight: 500;">💡 Dica:</div>
-            <div style="font-size: 0.8125rem; color: #075985;">
-              Crie ou edite SVGs facilmente em 
-              <a href="https://www.svgviewer.dev/" target="_blank" rel="noopener noreferrer" style="color: #0284c7; text-decoration: underline; font-weight: 500;">svgviewer.dev</a>
-              e depois cole o código aqui.
-            </div>
+          <div class="smallNote" style="padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: #1e40af;">
+            <strong>💡 Dica:</strong> Crie ou edite SVGs facilmente em 
+            <a href="https://www.svgviewer.dev/" target="_blank" rel="noopener noreferrer" style="color: #1e40af; text-decoration: underline; font-weight: 500;">svgviewer.dev</a>
+            e depois cole o código aqui.
           </div>
           <textarea id="insp-svgCode" placeholder="Cole ou digite o código SVG aqui" style="min-height: 120px; font-family: monospace; font-size: 0.875rem; width: 100%; padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem; color: var(--text-primary); box-sizing: border-box; resize: vertical;">${escapeHtml(p.svg || '')}</textarea>
           <div class="smallNote">Cole o código SVG completo (incluindo a tag &lt;svg&gt;)</div>
@@ -7111,9 +7155,9 @@
           </div>
         </div>
         <div class="inspector-field">
-          <label>
-            <input type="checkbox" id="insp-barcodeDisplayValue" ${p.displayValue !== false ? 'checked' : ''}>
-            <span style="margin-left: 0.5rem;">Display Value</span>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+            <input type="checkbox" id="insp-barcodeDisplayValue" ${p.displayValue !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <span>Display Value</span>
           </label>
         </div>
         <div class="inspector-field">
@@ -7204,12 +7248,12 @@
         <div class="inspector-field">
           <label>Texto</label>
           <input type="text" id="insp-choiceText" value="${escapeHtml(p.choiceText || 'Texto...')}" placeholder="Texto...">
-          <div class="smallNote">Texto que aparece ao lado do ícone</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Texto que aparece ao lado do ícone</div>
         </div>
         <div class="inspector-field">
-          <label>
-            <input type="checkbox" id="insp-choiceChecked" ${p.choiceChecked === true ? 'checked' : ''}>
-            <span style="margin-left: 0.5rem;">Marcado</span>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+            <input type="checkbox" id="insp-choiceChecked" ${p.choiceChecked === true ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <span>Marcado</span>
           </label>
         </div>
         <div class="inspector-field">
@@ -7249,12 +7293,12 @@
         <div class="inspector-field">
           <label>Texto</label>
           <input type="text" id="insp-choiceText" value="${escapeHtml(p.choiceText || 'Texto...')}" placeholder="Texto...">
-          <div class="smallNote">Texto que aparece ao lado do ícone</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Texto que aparece ao lado do ícone</div>
         </div>
         <div class="inspector-field">
-          <label>
-            <input type="checkbox" id="insp-choiceChecked" ${p.choiceChecked === true ? 'checked' : ''}>
-            <span style="margin-left: 0.5rem;">Marcado</span>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+            <input type="checkbox" id="insp-choiceChecked" ${p.choiceChecked === true ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <span>Marcado</span>
           </label>
         </div>
         <div class="inspector-field">
@@ -7364,17 +7408,17 @@
         <div class="inspector-field">
           <label class="smallNote">Device Pixel Ratio</label>
           <input type="number" id="insp-chartDevicePixelRatio" value="${p.chartDevicePixelRatio || 2}" min="1" max="4" step="1">
-          <div class="smallNote">Valor maior = melhor qualidade (2 é recomendado)</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Valor maior = melhor qualidade (2 é recomendado)</div>
         </div>
         <div class="inspector-field">
           <label>Dados do Gráfico (JSON)</label>
           <textarea id="insp-chartData" rows="8" placeholder='{"labels": ["Jan", "Feb"], "datasets": [...]}'>${escapeHtml(JSON.stringify(p.chartData || { labels: [], datasets: [] }, null, 2))}</textarea>
-          <div class="smallNote">Formato JSON do Chart.js. Deve conter "labels" e "datasets"</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Formato JSON do Chart.js. Deve conter "labels" e "datasets"</div>
         </div>
         <div class="inspector-field">
           <label>Opções do Gráfico (JSON)</label>
           <textarea id="insp-chartOptions" rows="8" placeholder='{"responsive": false, "animation": {"duration": 0}, ...}'>${escapeHtml(JSON.stringify(p.chartOptions || { responsive: false, animation: { duration: 0 } }, null, 2))}</textarea>
-          <div class="smallNote">Formato JSON do Chart.js. animation.duration deve ser 0 para export correto</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Formato JSON do Chart.js. animation.duration deve ser 0 para export correto</div>
         </div>
         <div class="inspector-field">
           <label class="smallNote">Alinhamento</label>
@@ -7410,10 +7454,10 @@
         <div class="inspector-field">
           <label class="smallNote">Espaçamento entre elementos (gap)</label>
           <input type="number" id="insp-groupGap" value="${p.gap || 10}" min="0" max="50">
-          <div class="smallNote">Espaço entre os elementos dentro do grupo</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Espaço entre os elementos dentro do grupo</div>
         </div>
         <div class="inspector-field">
-          <div class="smallNote">Elementos no grupo: ${p.children?.length || 0}</div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Elementos no grupo: ${p.children?.length || 0}</div>
         </div>
         ${renderMarginSection(element)}
       `;
@@ -11497,7 +11541,10 @@
         <div style="margin-bottom: 2rem;">
           <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #2563eb;">📑 Índice (Table of Contents)</h3>
           <div class="inspector-field">
-            <label><input type="checkbox" id="tocEnabled" ${documentTOC?.enabled ? 'checked' : ''}> Habilitar Índice</label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+              <input type="checkbox" id="tocEnabled" ${documentTOC?.enabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Habilitar Índice</span>
+            </label>
             <div class="smallNote">Marque elementos como "TOC" no editor para incluí-los no índice</div>
           </div>
           <div id="tocOptions" style="${documentTOC?.enabled ? '' : 'display: none;'}">
@@ -11506,7 +11553,7 @@
               <input type="text" id="tocTitle" value="${escapeHtml(documentTOC?.title || 'Índice')}">
             </div>
             <div class="inspector-field">
-              <div class="smallNote" style="padding: 0.75rem; background: #111827; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem;">
+              <div class="smallNote" style="padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: #1e40af;">
                 <strong>💡 Como usar:</strong><br>
                 • Selecione um elemento (text, header) no canvas<br>
                 • No editor, marque a opção "Incluir no Índice"<br>
@@ -11632,7 +11679,10 @@
         <div>
           <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #2563eb;">🔒 Segurança do PDF</h3>
           <div class="inspector-field">
-            <label><input type="checkbox" id="securityEnabled" ${documentSecurity?.enabled ? 'checked' : ''}> Habilitar Proteção por Senha</label>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+              <input type="checkbox" id="securityEnabled" ${documentSecurity?.enabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Habilitar Proteção por Senha</span>
+            </label>
             <div class="smallNote">Adicione senhas e permissões para proteger o PDF</div>
           </div>
           <div id="securityOptions" style="${documentSecurity?.enabled ? '' : 'display: none;'}">
@@ -11649,10 +11699,22 @@
             <div class="inspector-field">
               <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Permissões</label>
               <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                <label><input type="checkbox" id="securityPrinting" ${documentSecurity?.permissions?.printing !== false ? 'checked' : ''}> Permitir Impressão</label>
-                <label><input type="checkbox" id="securityModifying" ${documentSecurity?.permissions?.modifying !== false ? 'checked' : ''}> Permitir Modificação</label>
-                <label><input type="checkbox" id="securityCopying" ${documentSecurity?.permissions?.copying !== false ? 'checked' : ''}> Permitir Cópia</label>
-                <label><input type="checkbox" id="securityAnnotating" ${documentSecurity?.permissions?.annotating !== false ? 'checked' : ''}> Permitir Anotações</label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="securityPrinting" ${documentSecurity?.permissions?.printing !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Permitir Impressão</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="securityModifying" ${documentSecurity?.permissions?.modifying !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Permitir Modificação</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="securityCopying" ${documentSecurity?.permissions?.copying !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Permitir Cópia</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="securityAnnotating" ${documentSecurity?.permissions?.annotating !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Permitir Anotações</span>
+                </label>
               </div>
             </div>
             <div class="inspector-field">
@@ -11690,7 +11752,10 @@
           <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
             <h4 style="margin-bottom: 0.75rem; font-size: 1rem; font-weight: 500; color: #374151;">Compressão</h4>
             <div class="inspector-field">
-              <label><input type="checkbox" id="pageCompress" ${documentCompress ? 'checked' : ''}> Comprimir PDF</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="pageCompress" ${documentCompress ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Comprimir PDF</span>
+              </label>
               <div class="smallNote">Reduz o tamanho do arquivo PDF gerado (pode aumentar o tempo de geração)</div>
             </div>
           </div>
@@ -12117,24 +12182,24 @@
     // Função para contar elementos válidos (grupos vazios não contam, mas grupos com elementos dentro contam)
     function countValidElements(el) {
       if (!el) return 0;
-      
+
       // Se não é grupo, conta como 1 elemento válido
       if (el.type !== 'group') {
         return 1;
       }
-      
+
       // Se é grupo, verifica se tem filhos válidos
       const children = el.properties?.children || [];
       if (children.length === 0) {
         return 0; // Grupo vazio não conta
       }
-      
+
       // Conta elementos válidos dentro do grupo
       let count = 0;
       for (const child of children) {
         count += countValidElements(child);
       }
-      
+
       return count;
     }
 
@@ -12142,28 +12207,28 @@
     function updatePreviewButtonVisibility() {
       const bubbleTestBtn = document.getElementById('bubbleTestBtn');
       if (!bubbleTestBtn) return;
-      
+
       const rootGroup = getRootGroup();
       const headerChildren = documentHeader.root?.properties?.children || [];
       const footerChildren = documentFooter.root?.properties?.children || [];
-      
+
       let totalValidElements = 0;
-      
+
       // Contar elementos do grupo raiz
       if (rootGroup) {
         totalValidElements += countValidElements(rootGroup);
       }
-      
+
       // Contar elementos do header
       for (const child of headerChildren) {
         totalValidElements += countValidElements(child);
       }
-      
+
       // Contar elementos do footer
       for (const child of footerChildren) {
         totalValidElements += countValidElements(child);
       }
-      
+
       // Mostrar botão apenas se houver pelo menos 1 elemento válido
       if (totalValidElements > 0) {
         bubbleTestBtn.style.display = 'inline-flex';
@@ -12186,7 +12251,7 @@
       if (clearBtn) {
         clearBtn.style.display = hasElements ? 'block' : 'none';
       }
-      
+
       // Atualizar também o botão de pré-visualizar
       updatePreviewButtonVisibility();
     }
@@ -13211,7 +13276,7 @@
 
       // Inicializar painel arrastável
       initDraggablePanel();
-      
+
       // Inicializar visibilidade do botão de pré-visualizar
       if (typeof updatePreviewButtonVisibility === 'function') {
         updatePreviewButtonVisibility();
