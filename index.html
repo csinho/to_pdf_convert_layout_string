@@ -11195,31 +11195,41 @@
         // Construir objeto dd (sem funções, apenas dados)
         const dd = buildDocDefinitionForSerialization();
         
-        // Enviar objeto dd para Edge Function
-        const { data, error } = await supabaseClient.functions.invoke('generate-pdf-code', {
-          body: { dd: dd }
+        // Usar fetch direto para garantir que os headers sejam enviados corretamente
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-pdf-code`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': SUPABASE_ANON_KEY
+          },
+          body: JSON.stringify({ dd: dd })
         });
 
-        if (error) {
-          throw error;
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Erro ${response.status}: ${errorText || response.statusText}`);
         }
 
-        if (data && data.code) {
+        const result = await response.json();
+
+        if (result && result.code) {
           // Exibir código gerado
-          codeEditor.textContent = data.code;
+          codeEditor.textContent = result.code;
           
           // Salvar código gerado no localStorage
           try {
-            localStorage.setItem(STORAGE_CODE_KEY, data.code);
+            localStorage.setItem(STORAGE_CODE_KEY, result.code);
           } catch (e) {
             console.warn('Erro ao salvar código no localStorage:', e);
           }
         } else {
-          throw new Error('Resposta inválida da Edge Function');
+          throw new Error('Resposta inválida da Edge Function: código não encontrado');
         }
       } catch (error) {
         console.error('Erro ao gerar código:', error);
-        codeEditor.textContent = `// Erro ao gerar código: ${error.message}\n\nPor favor, verifique:\n1. Se a Edge Function está configurada corretamente\n2. Se você está autenticado no Supabase\n3. Se há elementos no canvas`;
+        const errorMessage = error.message || 'Erro desconhecido';
+        codeEditor.textContent = `// Erro ao gerar código: ${errorMessage}\n\nPor favor, verifique:\n1. Se a Edge Function está configurada e deployada corretamente\n2. Se a URL da Edge Function está correta\n3. Se há elementos no canvas\n4. Verifique o console para mais detalhes`;
       }
     }
 
