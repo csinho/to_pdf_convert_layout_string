@@ -4865,9 +4865,8 @@
 
       selectedElementId = id;
       // IMPORTANTE: Não recriar o DOM quando apenas selecionamos
-      // Apenas atualizar o inspector e código
+      // Apenas atualizar o inspector (código será gerado apenas quando solicitado)
       renderInspector();
-      updateCode();
       // Salvar estado após seleção
       saveState();
     }
@@ -11142,7 +11141,107 @@
     // -----------------------
     // Code tab
     // -----------------------
-    function updateCode() {
+    
+    // Função para coletar apenas as configurações dos elementos (sem gerar código)
+    function getElementConfigurations() {
+      const root = getRootGroup();
+      
+      // Coletar configurações de elementos (deep clone para evitar referências)
+      const cleanedElements = cleanElementsForStorage(elements);
+      
+      return {
+        elements: cleanedElements,
+        pageSize: pageSize,
+        orientation: orientation,
+        pageMargins: pageMargins,
+        documentHeader: documentHeader ? JSON.parse(JSON.stringify(documentHeader)) : null,
+        documentFooter: documentFooter ? JSON.parse(JSON.stringify(documentFooter)) : null,
+        documentWatermark: documentWatermark ? JSON.parse(JSON.stringify(documentWatermark)) : null,
+        documentTOC: documentTOC ? JSON.parse(JSON.stringify(documentTOC)) : null,
+        documentSecurity: documentSecurity ? JSON.parse(JSON.stringify(documentSecurity)) : null,
+        documentPageInfo: documentPageInfo ? JSON.parse(JSON.stringify(documentPageInfo)) : null,
+        documentCompress: documentCompress
+      };
+    }
+
+    // Função para construir objeto dd sem funções (apenas dados serializáveis)
+    function buildDocDefinitionForSerialization() {
+      const dd = buildDocDefinition();
+      
+      // Converter funções em objetos serializáveis
+      // Para header/footer, usar _content se disponível
+      if (dd.header && typeof dd.header === 'function' && dd.header._content) {
+        dd.header = { _isFunction: true, _content: dd.header._content };
+      }
+      if (dd.footer && typeof dd.footer === 'function' && dd.footer._content) {
+        dd.footer = { _isFunction: true, _content: dd.footer._content };
+      }
+      
+      // Para funções em layouts de tabela, precisamos extrair os valores
+      // Isso será feito na Edge Function
+      
+      return dd;
+    }
+
+    // Função para gerar código via Edge Function
+    async function generateCodeViaEdgeFunction() {
+      const codeEditor = document.getElementById('codeEditor');
+      if (!codeEditor) return;
+
+      // Mostrar loading
+      codeEditor.textContent = 'Gerando código... Aguarde.';
+      
+      try {
+        // Construir objeto dd (sem funções, apenas dados)
+        const dd = buildDocDefinitionForSerialization();
+        
+        // Enviar objeto dd para Edge Function
+        const { data, error } = await supabaseClient.functions.invoke('generate-pdf-code', {
+          body: { dd: dd }
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data && data.code) {
+          // Exibir código gerado
+          codeEditor.textContent = data.code;
+          
+          // Salvar código gerado no localStorage
+          try {
+            localStorage.setItem(STORAGE_CODE_KEY, data.code);
+          } catch (e) {
+            console.warn('Erro ao salvar código no localStorage:', e);
+          }
+        } else {
+          throw new Error('Resposta inválida da Edge Function');
+        }
+      } catch (error) {
+        console.error('Erro ao gerar código:', error);
+        codeEditor.textContent = `// Erro ao gerar código: ${error.message}\n\nPor favor, verifique:\n1. Se a Edge Function está configurada corretamente\n2. Se você está autenticado no Supabase\n3. Se há elementos no canvas`;
+      }
+    }
+
+    // Função updateCode refatorada - agora chama a Edge Function
+    async function updateCode() {
+      // Verificar se há elementos para gerar código
+      const root = getRootGroup();
+      if (!root || !root.properties || !root.properties.children || root.properties.children.length === 0) {
+        const codeEditor = document.getElementById('codeEditor');
+        if (codeEditor) {
+          codeEditor.textContent = '// Adicione elementos para gerar o código';
+        }
+        return;
+      }
+
+      // Chamar Edge Function para gerar código
+      await generateCodeViaEdgeFunction();
+    }
+
+    // Função antiga mantida para referência (será removida após migração completa)
+    // Esta função contém toda a lógica de serialização que será movida para a Edge Function
+    function updateCode_OLD() {
       const dd = buildDocDefinition();
 
       // Mapear funções para seus valores de variáveis locais (para substituição)
@@ -11781,7 +11880,6 @@
           if (!documentTOC) documentTOC = {};
           documentTOC.enabled = tocEnabled.checked;
           if (tocOptions) tocOptions.style.display = documentTOC.enabled ? '' : 'none';
-          updateCode();
         });
       }
 
@@ -11789,7 +11887,6 @@
         tocTitle.addEventListener('input', () => {
           if (!documentTOC) documentTOC = {};
           documentTOC.title = tocTitle.value.trim() || 'Índice';
-          updateCode();
         });
       }
     }
@@ -11812,7 +11909,6 @@
           } else {
             documentWatermark = null;
           }
-          updateCode();
         });
       }
 
@@ -11820,7 +11916,6 @@
         watermarkFontSize.addEventListener('input', () => {
           if (!documentWatermark) documentWatermark = {};
           documentWatermark.fontSize = parseInt(watermarkFontSize.value) || 48;
-          updateCode();
         });
       }
 
@@ -11829,14 +11924,12 @@
           watermarkColorText.value = watermarkColor.value;
           if (!documentWatermark) documentWatermark = {};
           documentWatermark.color = watermarkColor.value;
-          updateCode();
         });
         watermarkColorText.addEventListener('input', () => {
           if (/^#[0-9A-F]{6}$/i.test(watermarkColorText.value)) {
             watermarkColor.value = watermarkColorText.value;
             if (!documentWatermark) documentWatermark = {};
             documentWatermark.color = watermarkColorText.value;
-            updateCode();
           }
         });
       }
@@ -11845,7 +11938,6 @@
         watermarkOpacity.addEventListener('input', () => {
           if (!documentWatermark) documentWatermark = {};
           documentWatermark.opacity = parseFloat(watermarkOpacity.value) || 0.3;
-          updateCode();
         });
       }
 
@@ -11853,7 +11945,6 @@
         watermarkAngle.addEventListener('input', () => {
           if (!documentWatermark) documentWatermark = {};
           documentWatermark.angle = parseInt(watermarkAngle.value) || -45;
-          updateCode();
         });
       }
     }
@@ -11861,7 +11952,6 @@
     function clearWatermark() {
       documentWatermark = null;
       renderPageInspector();
-      updateCode();
     }
     window.clearWatermark = clearWatermark;
 
@@ -11882,7 +11972,6 @@
           documentSecurity.enabled = securityEnabled.checked;
           if (securityOptions) securityOptions.style.display = documentSecurity.enabled ? '' : 'none';
           if (!documentSecurity.enabled) documentSecurity = null;
-          updateCode();
         });
       }
 
@@ -11891,7 +11980,6 @@
           if (!documentSecurity) documentSecurity = {};
           documentSecurity.userPassword = securityUserPassword.value;
           if (!documentSecurity.userPassword && !documentSecurity.ownerPassword) documentSecurity = null;
-          updateCode();
         });
       }
 
@@ -11899,7 +11987,6 @@
         securityOwnerPassword.addEventListener('input', () => {
           if (!documentSecurity) documentSecurity = {};
           documentSecurity.ownerPassword = securityOwnerPassword.value;
-          updateCode();
         });
       }
 
@@ -11908,7 +11995,6 @@
           if (!documentSecurity) documentSecurity = {};
           if (!documentSecurity.permissions) documentSecurity.permissions = {};
           documentSecurity.permissions.printing = securityPrinting.checked;
-          updateCode();
         });
       }
 
@@ -11917,7 +12003,6 @@
           if (!documentSecurity) documentSecurity = {};
           if (!documentSecurity.permissions) documentSecurity.permissions = {};
           documentSecurity.permissions.modifying = securityModifying.checked;
-          updateCode();
         });
       }
 
@@ -11926,7 +12011,6 @@
           if (!documentSecurity) documentSecurity = {};
           if (!documentSecurity.permissions) documentSecurity.permissions = {};
           documentSecurity.permissions.copying = securityCopying.checked;
-          updateCode();
         });
       }
 
@@ -11935,7 +12019,6 @@
           if (!documentSecurity) documentSecurity = {};
           if (!documentSecurity.permissions) documentSecurity.permissions = {};
           documentSecurity.permissions.annotating = securityAnnotating.checked;
-          updateCode();
         });
       }
     }
@@ -11955,7 +12038,6 @@
           if (!documentPageInfo.author && !documentPageInfo.title && !documentPageInfo.subject && !documentPageInfo.keywords) {
             documentPageInfo = null;
           }
-          updateCode();
         });
       }
 
@@ -11966,7 +12048,6 @@
           if (!documentPageInfo.author && !documentPageInfo.title && !documentPageInfo.subject && !documentPageInfo.keywords) {
             documentPageInfo = null;
           }
-          updateCode();
         });
       }
 
@@ -11977,7 +12058,6 @@
           if (!documentPageInfo.author && !documentPageInfo.title && !documentPageInfo.subject && !documentPageInfo.keywords) {
             documentPageInfo = null;
           }
-          updateCode();
         });
       }
 
@@ -11988,14 +12068,12 @@
           if (!documentPageInfo.author && !documentPageInfo.title && !documentPageInfo.subject && !documentPageInfo.keywords) {
             documentPageInfo = null;
           }
-          updateCode();
         });
       }
 
       if (pageCompress) {
         pageCompress.addEventListener('change', () => {
           documentCompress = pageCompress.checked;
-          updateCode();
         });
       }
     }
@@ -12099,7 +12177,6 @@
         headerHeight.addEventListener('input', () => {
           documentHeader.height = parseInt(headerHeight.value) || 60;
           adjustPageMargins();
-          updateCode();
         });
       }
 
@@ -12127,7 +12204,6 @@
         footerHeight.addEventListener('input', () => {
           documentFooter.height = parseInt(footerHeight.value) || 60;
           adjustPageMargins();
-          updateCode();
         });
       }
     }
@@ -12265,7 +12341,7 @@
       // Isso evita crescimento infinito ao editar elementos
       renderCanvas(shouldAdjustSize);
       renderInspector();
-      updateCode();
+      // Código será gerado apenas quando usuário solicitar na aba de código
       // Atualizar visibilidade dos botões
       updateSaveTemplateButtonVisibility();
       // Salvar estado automaticamente após renderizar
@@ -12758,9 +12834,7 @@
             if (typeof renderPageInspector === 'function') {
               renderPageInspector();
             }
-            if (typeof updateCode === 'function') {
-              updateCode();
-            }
+            // Código será gerado apenas quando usuário solicitar na aba de código
             if (typeof saveState === 'function') {
               saveState();
             }
@@ -12934,7 +13008,7 @@
           }
           selectedElementId = null;
           renderInspector();
-          updateCode();
+          // Código será gerado apenas quando usuário solicitar na aba de código
         }
       }
     });
@@ -13872,7 +13946,7 @@ ${pdfText.substring(0, 5000)}...`
       // Renderizar tudo
       renderAll();
       renderInspector();
-      updateCode();
+      // Código será gerado apenas quando usuário solicitar na aba de código
       updateSaveTemplateButtonVisibility();
       
       if (typeof showAlertModal === 'function') {
