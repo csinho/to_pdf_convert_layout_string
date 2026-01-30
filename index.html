@@ -12536,8 +12536,7 @@
 
         console.log(generatedCode);
         
-        // Atualizar o codeEditor com o código gerado (para manter sincronizado)
-        const codeEditor = document.getElementById('codeEditor');
+        // Atualizar o codeEditor global com o código gerado (para manter sincronizado)
         if (codeEditor) {
           codeEditor.textContent = generatedCode;
         }
@@ -12553,10 +12552,18 @@
         bubbleIframe.src = BUBBLE_URL;
 
         bubbleIframe.onload = () => {
-          const cod = getCodToSend();
+          // Usar o código gerado diretamente (já temos ele em mãos)
+          const cod = (generatedCode || '').trim();
           const origin = new URL(bubbleIframe.src).origin;
-          const value = cod|| generatedCode
-          bubbleIframe.contentWindow.postMessage({ type: "SET_COD", value }, origin);
+
+          if (!cod) {
+            console.error('Erro: código está vazio ao enviar para Bubble');
+            showAlertModal('Erro', 'O código gerado está vazio. Por favor, tente novamente.');
+            return;
+          }
+
+          console.log('Enviando código para Bubble:', cod.substring(0, 100) + '...');
+          bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
         };
       } catch (error) {
         // Esconder modal de loading em caso de erro
