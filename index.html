@@ -12553,7 +12553,8 @@
         bubbleIframe.src = BUBBLE_URL;
 
         bubbleIframe.onload = () => {
-          const cod = getCodToSend();
+
+          const cod = getCodToSend() || generatedCode;
           const origin = new URL(bubbleIframe.src).origin;
 
           bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
