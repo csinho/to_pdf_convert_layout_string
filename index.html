@@ -11117,7 +11117,22 @@
         iframe.src = '';
       }
     }
-    window.closeBubbleTestModal = closeBubbleTestModal; // Tornar global para uso no onclick
+    window.closeBubbleTestModal = closeBubbleTestModal; // Tornar global
+
+    // Funções para controlar modal de loading de código
+    function showLoadingCodeModal() {
+      const modal = document.getElementById('loadingCodeModal');
+      if (modal) {
+        modal.classList.add('active');
+      }
+    }
+
+    function hideLoadingCodeModal() {
+      const modal = document.getElementById('loadingCodeModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
 
     // Fechar modais com ESC
     document.addEventListener('keydown', (e) => {
@@ -11125,6 +11140,7 @@
         closeConfirmModal();
         closePreviewModal();
         closeBubbleTestModal();
+        hideLoadingCodeModal();
       }
     });
 
@@ -11173,14 +11189,8 @@
       return dd;
     }
 
-    // Função para gerar código via Edge Function
-    async function generateCodeViaEdgeFunction() {
-      const codeEditor = document.getElementById('codeEditor');
-      if (!codeEditor) return;
-
-      // Mostrar loading
-      codeEditor.textContent = 'Gerando código... Aguarde.';
-      
+    // Função para gerar código via Edge Function e retornar o código (sem atualizar codeEditor)
+    async function generateCodeViaSupabase() {
       try {
         // Construir objeto dd (sem funções, apenas dados)
         const dd = buildDocDefinitionForSerialization();
@@ -11204,18 +11214,35 @@
         const result = await response.json();
 
         if (result && result.code) {
-          // Exibir código gerado
-          codeEditor.textContent = result.code;
-          
           // Salvar código gerado no localStorage
           try {
             localStorage.setItem(STORAGE_CODE_KEY, result.code);
           } catch (e) {
             console.warn('Erro ao salvar código no localStorage:', e);
           }
+          
+          return result.code;
         } else {
           throw new Error('Resposta inválida da Edge Function: código não encontrado');
         }
+      } catch (error) {
+        console.error('Erro ao gerar código:', error);
+        throw error;
+      }
+    }
+
+    async function generateCodeViaEdgeFunction() {
+      const codeEditor = document.getElementById('codeEditor');
+      if (!codeEditor) return;
+
+      // Mostrar loading
+      codeEditor.textContent = 'Gerando código... Aguarde.';
+      
+      try {
+        const code = await generateCodeViaSupabase();
+        
+        // Exibir código gerado
+        codeEditor.textContent = code;
       } catch (error) {
         console.error('Erro ao gerar código:', error);
         const errorMessage = error.message || 'Erro desconhecido';
@@ -12493,19 +12520,50 @@
       return (codeEditor.value ?? codeEditor.textContent ?? "").trim();
     }
 
-    bubbleTestBtn.addEventListener("click", () => {
-      const bubbleIframe = document.getElementById("bubbleTestIframe");
-      const bubbleModal = document.getElementById("bubbleTestModal");
+    bubbleTestBtn.addEventListener("click", async () => {
+      // Verificar se há elementos antes de gerar código
+      if (!hasAnyValidElements()) {
+        showAlertModal('Aviso', 'Adicione pelo menos um elemento ao canvas para pré-visualizar o PDF.');
+        return;
+      }
 
-      bubbleModal.classList.add("active");
-      bubbleIframe.src = BUBBLE_URL;
+      // Mostrar modal de loading
+      showLoadingCodeModal();
 
-      bubbleIframe.onload = () => {
-        const cod = getCodToSend();
-        const origin = new URL(bubbleIframe.src).origin;
+      try {
+        // Gerar código via Supabase
+        const generatedCode = await generateCodeViaSupabase();
+        
+        // Atualizar o codeEditor com o código gerado (para manter sincronizado)
+        const codeEditor = document.getElementById('codeEditor');
+        if (codeEditor) {
+          codeEditor.textContent = generatedCode;
+        }
 
-        bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
-      };
+        // Esconder modal de loading
+        hideLoadingCodeModal();
+
+        // Abrir modal de pré-visualização
+        const bubbleIframe = document.getElementById("bubbleTestIframe");
+        const bubbleModal = document.getElementById("bubbleTestModal");
+
+        bubbleModal.classList.add("active");
+        bubbleIframe.src = BUBBLE_URL;
+
+        bubbleIframe.onload = () => {
+          const cod = getCodToSend();
+          const origin = new URL(bubbleIframe.src).origin;
+
+          bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
+        };
+      } catch (error) {
+        // Esconder modal de loading em caso de erro
+        hideLoadingCodeModal();
+        
+        // Mostrar erro
+        const errorMessage = error.message || 'Erro desconhecido';
+        showAlertModal('Erro ao gerar código', `Não foi possível gerar o código para pré-visualização.\n\nErro: ${errorMessage}\n\nPor favor, verifique:\n1. Se a Edge Function está configurada e deployada corretamente\n2. Se a URL da Edge Function está correta\n3. Se há elementos no canvas\n4. Verifique o console para mais detalhes`);
+      }
     });
 
 
@@ -14173,6 +14231,17 @@ ${pdfText.substring(0, 5000)}...`
       <div class="custom-modal-footer">
         <button class="custom-modal-btn custom-modal-btn-confirm" onclick="closeAlertModal()"
           style="width: 100%;">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Loading para geração de código -->
+  <div id="loadingCodeModal" class="custom-modal">
+    <div class="custom-modal-overlay"></div>
+    <div class="custom-modal-content" style="max-width: 400px;">
+      <div class="custom-modal-body" style="text-align: center; padding: 2rem;">
+        <div class="loading-spinner" style="width: 48px; height: 48px; border: 4px solid var(--border-color); border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1.5rem;"></div>
+        <p style="margin: 0; font-size: 1rem; color: var(--text-primary);">Estamos gerando o layout do PDF</p>
       </div>
     </div>
   </div>
