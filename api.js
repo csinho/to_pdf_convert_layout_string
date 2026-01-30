@@ -1,0 +1,11845 @@
+/****************************************************
+     * PDFMake Visual Editor (Nested containers)
+     * - Mantém o layout do gerador_atualizado.html
+     * - Adiciona suporte a "elementos dentro de elementos"
+     *   (Group / Columns / List / Table) como no index.html
+     ****************************************************/
+
+    // -----------------------
+    // State
+    // -----------------------
+    let draggedType = null;
+
+    // Estrutura em árvore:
+    // elements = [ rootGroup ]
+    let elements = [];
+    let selectedElementId = null;
+
+    let orientation = 'portrait';
+    let pageSize = 'A4';
+    let pageMargins = [40, 60, 40, 60];
+    let zoom = 0.95;
+
+    // Headers & Footers - Agora como containers visuais no canvas
+    let documentHeader = {
+      enabled: false,
+      root: null, // Container group com children (como elements)
+      height: 60 // Altura estimada para cálculo de margins
+    };
+    let documentFooter = {
+      enabled: false,
+      root: null, // Container group com children (como elements)
+      height: 60 // Altura estimada para cálculo de margins
+    };
+
+    // Watermark (apenas texto - PDFMake não suporta imagens)
+    let documentWatermark = null; // { text: '', fontSize: 48, color: '#cccccc', opacity: 0.3, angle: -45 }
+
+    // TOC (Table of Contents)
+    let documentTOC = null; // { title: 'Índice', titleStyle: {}, itemStyle: {}, textStyle: {}, numberStyle: {} }
+
+    // Security
+    let documentSecurity = null; // { userPassword: '', ownerPassword: '', permissions: { printing: true, modifying: true, copying: true, annotating: true } }
+
+    // Page Info (Metadados) e Compress
+    let documentPageInfo = null; // { author: '', title: '', subject: '', keywords: '' }
+    let documentCompress = false; // true/false
+
+    // Cache para código gerado pelo Supabase
+    let lastGeneratedCode = null; // Último código gerado com sucesso
+    let lastElementsStateHash = null; // Hash do estado que gerou o último código
+
+    // -----------------------
+    // Supabase - Configuração e Autenticação
+    // -----------------------
+    const SUPABASE_URL = "https://ckhqcooulkucxpbcceat.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNraHFjb291bGt1Y3hwYmNjZWF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5NTQ3OTQsImV4cCI6MjA4MjUzMDc5NH0.OmdLp5Nf261BqUdZP6id-QpydPrTtPUDtqi3Yi2PVXw";
+
+    let supabaseClient = null; // Usando nome diferente para evitar conflito com variável global do Supabase
+    let currentUser = null;
+    let currentProfile = null;
+    let currentInstallation = null;
+    let currentTemplateId = null; // ID do template carregado (null = novo template)
+
+    // Inicializar Supabase quando o script carregar
+    function initSupabase() {
+      // O Supabase JS v2 expõe createClient no objeto window.supabase
+      if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
+        try {
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          checkAuth();
+        } catch (error) {
+          console.error('Erro ao inicializar Supabase:', error);
+          showLoginModal(); // Mostrar modal mesmo com erro
+        }
+      } else {
+        // Tentar novamente após um pequeno delay (máximo 10 tentativas)
+        if (typeof initSupabase.attempts === 'undefined') {
+          initSupabase.attempts = 0;
+        }
+        initSupabase.attempts++;
+        if (initSupabase.attempts < 50) { // 5 segundos máximo
+          setTimeout(initSupabase, 100);
+        } else {
+          console.error('Timeout ao carregar Supabase');
+          showLoginModal(); // Mostrar modal mesmo se não conseguir carregar
+        }
+      }
+    }
+
+    // Aguardar carregamento do script do Supabase
+    window.addEventListener('load', () => {
+      setTimeout(initSupabase, 300);
+    });
+
+    // -----------------------
+    // LocalStorage - Auto-save
+    // -----------------------
+    const STORAGE_KEY = 'pdfmake_editor_state';
+    const STORAGE_CODE_KEY = 'pdfmake_editor_code';
+
+    // Salvar estado completo no localStorage
+    // Função recursiva para limpar propriedades UI-específicas de qualquer objeto
+    function cleanElementForStorageRecursive(el) {
+      if (el === null || el === undefined) return el;
+      
+      // Se for um array, processar cada elemento
+      if (Array.isArray(el)) {
+        return el.map(item => cleanElementForStorageRecursive(item));
+      }
+      
+      // Se não for um objeto, retornar como está
+      if (typeof el !== 'object') return el;
+      
+      // Criar uma cópia limpa do objeto
+      const cleaned = {};
+      
+      for (const key in el) {
+        if (!el.hasOwnProperty(key)) continue;
+        
+        // Pular propriedades UI-específicas
+        if (key === '_ui' || key === '_base64Preview' || key === '_styleName') {
+          continue;
+        }
+        
+        // Processar recursivamente valores que são objetos ou arrays
+        const value = el[key];
+        if (value !== null && typeof value === 'object') {
+          cleaned[key] = cleanElementForStorageRecursive(value);
+        } else {
+          cleaned[key] = value;
+        }
+      }
+      
+      return cleaned;
+    }
+
+    // Função para remover propriedades internas (como _base64Preview) antes de salvar
+    function cleanElementsForStorage(elements) {
+      if (!elements || !Array.isArray(elements)) return elements;
+      // Usar a função recursiva para limpar todos os elementos
+      return cleanElementForStorageRecursive(elements);
+    }
+
+    function saveState() {
+      try {
+        // Limpar elementos removendo propriedades internas antes de salvar
+        const cleanedElements = cleanElementsForStorage(elements);
+
+        const state = {
+          elements: cleanedElements,
+          selectedElementId: selectedElementId,
+          orientation: orientation,
+          pageSize: pageSize,
+          pageMargins: pageMargins,
+          zoom: zoom,
+          documentHeader: documentHeader ? cleanElementForStorageRecursive(documentHeader) : null,
+          documentFooter: documentFooter ? cleanElementForStorageRecursive(documentFooter) : null,
+          documentWatermark: documentWatermark ? cleanElementForStorageRecursive(documentWatermark) : null,
+          documentTOC: documentTOC ? cleanElementForStorageRecursive(documentTOC) : null,
+          documentSecurity: documentSecurity ? cleanElementForStorageRecursive(documentSecurity) : null,
+          documentPageInfo: documentPageInfo ? cleanElementForStorageRecursive(documentPageInfo) : null,
+          documentCompress: documentCompress,
+          timestamp: Date.now()
+        };
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+        // Salvar também o código gerado
+        if (codeEditor && codeEditor.textContent) {
+          localStorage.setItem(STORAGE_CODE_KEY, codeEditor.textContent);
+        }
+      } catch (e) {
+        console.warn('Erro ao salvar estado no localStorage:', e);
+      }
+    }
+
+    // Carregar estado do localStorage
+    function loadState() {
+      try {
+        const savedState = localStorage.getItem(STORAGE_KEY);
+        if (!savedState) return false;
+
+        const state = JSON.parse(savedState);
+
+        // Verificar se o estado foi limpo (elementos vazios)
+        if (!state.elements || !Array.isArray(state.elements) || state.elements.length === 0) {
+          // Se elementos estão vazios, limpar estado salvo e não carregar
+          clearSavedState();
+          return false;
+        }
+
+        // Restaurar elementos (deep clone para evitar referências compartilhadas)
+        elements = deepClone(state.elements);
+
+        // Restaurar configurações globais
+        if (state.selectedElementId) selectedElementId = state.selectedElementId;
+        else selectedElementId = null;
+        if (state.orientation) orientation = state.orientation;
+        if (state.pageSize) pageSize = state.pageSize;
+        if (state.pageMargins) pageMargins = state.pageMargins;
+        if (state.zoom !== undefined) zoom = state.zoom;
+
+        // Restaurar header/footer
+        if (state.documentHeader) {
+          documentHeader = state.documentHeader;
+          // Garantir que root existe
+          if (!documentHeader.root) {
+            documentHeader.root = createHeaderFooterRoot();
+          }
+          // Se enabled mas não tem children, desabilitar
+          if (documentHeader.enabled && (!documentHeader.root.properties.children || documentHeader.root.properties.children.length === 0)) {
+            documentHeader.enabled = false;
+          }
+        }
+        if (state.documentFooter) {
+          documentFooter = state.documentFooter;
+          // Garantir que root existe
+          if (!documentFooter.root) {
+            documentFooter.root = createHeaderFooterRoot();
+          }
+          // Se enabled mas não tem children, desabilitar
+          if (documentFooter.enabled && (!documentFooter.root.properties.children || documentFooter.root.properties.children.length === 0)) {
+            documentFooter.enabled = false;
+          }
+        }
+
+        // Restaurar watermark
+        if (state.documentWatermark) documentWatermark = state.documentWatermark;
+
+        // Restaurar TOC
+        if (state.documentTOC) documentTOC = state.documentTOC;
+
+        // Restaurar Security
+        if (state.documentSecurity) documentSecurity = state.documentSecurity;
+
+        // Restaurar Page Info
+        if (state.documentPageInfo) documentPageInfo = state.documentPageInfo;
+
+        // Restaurar Compress
+        if (state.documentCompress !== undefined) documentCompress = state.documentCompress;
+
+        // Restaurar valores nos inputs do DOM
+        if (pageSizeSel && state.pageSize) pageSizeSel.value = state.pageSize;
+        if (orientationSel && state.orientation) orientationSel.value = state.orientation;
+        if (mL && state.pageMargins) mL.value = state.pageMargins[0];
+        if (mT && state.pageMargins) mT.value = state.pageMargins[1];
+        if (mR && state.pageMargins) mR.value = state.pageMargins[2];
+        if (mB && state.pageMargins) mB.value = state.pageMargins[3];
+        if (zoomRange && state.zoom !== undefined) {
+          zoomRange.value = Math.round(state.zoom * 100);
+          if (zoomLabel) zoomLabel.textContent = Math.round(state.zoom * 100) + '%';
+        }
+
+        return true;
+      } catch (e) {
+        console.warn('Erro ao carregar estado do localStorage:', e);
+        return false;
+      }
+    }
+
+    // Limpar estado salvo
+    function clearSavedState() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_CODE_KEY);
+      } catch (e) {
+        console.warn('Erro ao limpar estado do localStorage:', e);
+      }
+    }
+
+    // Get DOM elements
+    const pageSizeSel = document.getElementById("pageSize");
+    const orientationSel = document.getElementById("orientation");
+    const mL = document.getElementById("mL");
+    const mT = document.getElementById("mT");
+    const mR = document.getElementById("mR");
+    const mB = document.getElementById("mB");
+    const zoomRange = document.getElementById("zoomRange");
+    const zoomLabel = document.getElementById("zoomLabel");
+    // const previewBtn = document.getElementById("previewBtn");
+    const bubbleTestBtn = document.getElementById("bubbleTestBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const saveTemplateBtn = document.getElementById("saveTemplateBtn");
+    const canvas = document.getElementById("canvas");
+    const canvasEmpty = document.getElementById("canvasEmpty");
+    const elementsList = document.getElementById("elementsList");
+
+    // Code panel
+    const codeEditor = document.getElementById("codeEditor");
+    const copyBtn = document.getElementById("copyBtn");
+    const inspector = document.getElementById("inspector");
+
+    // -----------------------
+    // Helpers
+    // -----------------------
+    const uid = () => "id_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+
+    // Função para criar root container de header/footer
+    function createHeaderFooterRoot() {
+      return {
+        id: uid(),
+        type: 'group',
+        properties: {
+          orientation: 'row',
+          children: []
+        },
+        _ui: {}
+      };
+    }
+
+    // Inicializar roots de header/footer se não existirem
+    if (!documentHeader.root) {
+      documentHeader.root = createHeaderFooterRoot();
+    }
+    if (!documentFooter.root) {
+      documentFooter.root = createHeaderFooterRoot();
+    }
+
+    function deepClone(obj) {
+      return JSON.parse(JSON.stringify(obj));
+    }
+
+    function clamp(n, a, b) {
+      return Math.max(a, Math.min(b, n));
+    }
+
+    function getRootGroup() {
+      return elements.find(e => e.type === 'group') || null;
+    }
+
+    function isContainerType(type) {
+      return ['group', 'columns', 'list', 'table'].includes(type);
+    }
+
+    function defaultElement(type) {
+      const id = uid();
+      const base = { id, type, properties: {}, _ui: {} };
+
+      if (type === 'group') {
+        return {
+          ...base,
+          properties: {
+            orientation: 'column', // no editor visual (layout)
+            gap: 10,
+            children: []
+          }
+        };
+      }
+
+      if (type === 'header') {
+        return {
+          ...base,
+          properties: {
+            text: 'Cabeçalho',
+            fontSize: 18,
+            bold: true,
+            alignment: 'center',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'text') {
+        return {
+          ...base,
+          properties: {
+            text: 'Texto...',
+            fontSize: 14,
+            alignment: 'left',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'image') {
+        return {
+          ...base,
+          properties: {
+            url: '',
+            width: 200,
+            height: 150,
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'columns') {
+        const count = 3;
+        return {
+          ...base,
+          properties: {
+            columnsCount: count,
+            gap: 10,
+            // cada coluna tem children
+            columns: Array.from({ length: count }).map(() => ({ width: '*', children: [] })),
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'list') {
+        return {
+          ...base,
+          properties: {
+            listType: 'ul', // ul|ol
+            // items: array de {kind:'text', text} OU {kind:'node', node:<element>}
+            items: [
+              { kind: 'text', text: 'Item 1' },
+              { kind: 'text', text: 'Item 2' }
+            ],
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'table') {
+        // Template oficial: 4 colunas, 1 headerRows, 1 linha de dados
+        const cols = 4;
+        const headerRows = 1;
+
+        // Criar body com 2 linhas: header + dados
+        const body = [
+          // Linha 0 (header): 4 células com text: 'Coluna X', bold: true, alignment: 'center', fontSize: 10
+          Array.from({ length: cols }).map((_, colIdx) => ({
+            children: [{
+              id: uid(),
+              type: 'text',
+              properties: {
+                text: `Coluna ${colIdx + 1}`,
+                fontSize: 10,
+                bold: true,
+                alignment: 'center'
+              },
+              _ui: {}
+            }],
+            fontSize: 10,
+            alignment: 'center',
+            bold: true
+          })),
+          // Linha 1 (dados): 4 células com text: 'texto X', alignment: 'center', verticalAlignment: 'middle', fontSize: 9
+          Array.from({ length: cols }).map((_, colIdx) => ({
+            children: [{
+              id: uid(),
+              type: 'text',
+              properties: {
+                text: `texto ${colIdx + 1}`,
+                fontSize: 9,
+                bold: false,
+                alignment: 'center'
+              },
+              _ui: {}
+            }],
+            fontSize: 9,
+            alignment: 'center',
+            verticalAlignment: 'middle',
+            bold: false
+          }))
+        ];
+
+        return {
+          ...base,
+          properties: {
+            headerRows: headerRows,
+            widths: [40, '*', 40, '*'], // Template oficial: [40, '*', 40, '*']
+            body: body,
+            layout: 'custom',
+            customLayout: {
+              // Template oficial: hLineWidth/vLineWidth: 0.6
+              hLineWidth: 0.6,
+              vLineWidth: 0.6,
+              // Template oficial: hLineColor/vLineColor: '#000'
+              hLineColor: '#000',
+              vLineColor: '#000',
+              // Template oficial: paddingLeft/Right = 4, paddingTop/Bottom = 3
+              paddingLeft: 4,
+              paddingRight: 4,
+              paddingTop: 3,
+              paddingBottom: 3,
+              // Template oficial: fillColor(rowIndex) com cinza #EDEDED somente no header (rowIndex === 0)
+              fillColor: true // Será tratado como função na geração
+            },
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'margin') {
+        return { ...base, properties: { size: 20 } };
+      }
+
+      if (type === 'pageBreak') {
+        return { ...base, properties: {} };
+      }
+
+      if (type === 'qr') {
+        return {
+          ...base,
+          properties: {
+            text: 'https://exemplo.com',
+            fit: 100,
+            eccLevel: 'M',
+            foreground: '#000000',
+            background: '#ffffff',
+            alignment: 'center',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'svg') {
+        return {
+          ...base,
+          properties: {
+            svg: '<svg width="100" height="100"><circle cx="50" cy="50" r="40" fill="blue"/></svg>',
+            width: 100,
+            height: 100,
+            color: '#000000',
+            alignment: 'center',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'stamp') {
+        return {
+          ...base,
+          properties: {
+            sourceType: 'image',
+            value: '',
+            fit: [120, 120],
+            alignment: 'center',
+            margin: [0, 0, 0, 10],
+            opacity: 1
+          }
+        };
+      }
+
+      if (type === 'checkbox') {
+        return {
+          ...base,
+          properties: {
+            choiceType: 'checkbox',
+            choiceText: 'Texto...',
+            choiceChecked: false,
+            choiceIconPosition: 'before',
+            choiceGap: 8,
+            choiceIconSize: 12,
+            alignment: 'left',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'radio') {
+        return {
+          ...base,
+          properties: {
+            choiceType: 'radio',
+            choiceText: 'Texto...',
+            choiceChecked: false,
+            choiceIconPosition: 'before',
+            choiceGap: 8,
+            choiceIconSize: 12,
+            alignment: 'left',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'fillLine') {
+        return {
+          ...base,
+          properties: {
+            lineWidth: 200,
+            thickness: 0.8,
+            color: '#000000',
+            alignment: 'left',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'chart') {
+        return {
+          ...base,
+          properties: {
+            chartType: 'bar',
+            chartWidth: 400,
+            chartHeight: 200,
+            chartFit: [400, 200],
+            chartBackgroundColor: '#FFFFFF',
+            chartDevicePixelRatio: 2,
+            chartData: {
+              labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
+              datasets: [{
+                label: 'Dataset 1',
+                data: [10, 20, 30, 40, 50],
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+              }]
+            },
+            chartOptions: {
+              responsive: false,
+              animation: { duration: 0 },
+              scales: {
+                y: { beginAtZero: true }
+              }
+            },
+            alignment: 'center',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      if (type === 'barcode') {
+        return {
+          ...base,
+          properties: {
+            barcodeValue: 'ABC123456789',
+            format: 'CODE128',
+            lineWidth: 1.5,
+            barHeight: 30,
+            displayValue: true,
+            fontSize: 10,
+            fit: [201, 42],
+            alignment: 'center',
+            verticalAlignment: 'middle',
+            margin: [0, 0, 0, 10]
+          }
+        };
+      }
+
+      return base;
+    }
+
+    // -----------------------
+    // Tree traversal
+    // -----------------------
+    function walk(node, fn) {
+      if (!node) return;
+      fn(node);
+
+      if (node.type === 'group') {
+        (node.properties.children || []).forEach(ch => walk(ch, fn));
+      }
+
+      if (node.type === 'columns') {
+        (node.properties.columns || []).forEach(col => (col.children || []).forEach(ch => walk(ch, fn)));
+      }
+
+      if (node.type === 'list') {
+        (node.properties.items || []).forEach(it => {
+          if (it && it.kind === 'node' && it.node) walk(it.node, fn);
+        });
+      }
+
+      if (node.type === 'table') {
+        (node.properties.body || []).forEach(row => row.forEach(cell => (cell.children || []).forEach(ch => walk(ch, fn))));
+      }
+    }
+
+    function findNodeById(id) {
+      // Verificar header/footer primeiro
+      if (documentHeader.root && documentHeader.root.id === id) return documentHeader.root;
+      if (documentFooter.root && documentFooter.root.id === id) return documentFooter.root;
+
+      // Verificar filhos do header
+      if (documentHeader.root) {
+        let found = null;
+        walk(documentHeader.root, (n) => {
+          if (n.id === id) found = n;
+        });
+        if (found) return found;
+      }
+
+      // Verificar filhos do footer
+      if (documentFooter.root) {
+        let found = null;
+        walk(documentFooter.root, (n) => {
+          if (n.id === id) found = n;
+        });
+        if (found) return found;
+      }
+
+      // Verificar conteúdo principal
+      const root = getRootGroup();
+      if (!root) return null;
+      let found = null;
+      walk(root, (n) => {
+        if (n.id === id) found = n;
+      });
+      return found;
+    }
+
+    // Retorna: { node, parent, ctx }
+    // ctx descreve onde o node vive no parent:
+    // - { kind:'groupChildren', index }
+    // - { kind:'columns', colIndex, index }
+    // - { kind:'listItems', index }
+    // - { kind:'tableCell', row, col, index }
+    function findNodeWithParent(id) {
+      function rec(node, parent) {
+        if (!node) return null;
+
+        // group children
+        if (node.type === 'group') {
+          const arr = node.properties.children || [];
+          for (let i = 0; i < arr.length; i++) {
+            const ch = arr[i];
+            if (ch.id === id) return { node: ch, parent: node, ctx: { kind: 'groupChildren', index: i } };
+            const r = rec(ch, node);
+            if (r) return r;
+          }
+        }
+
+        // columns
+        if (node.type === 'columns') {
+          const cols = node.properties.columns || [];
+          for (let c = 0; c < cols.length; c++) {
+            const children = cols[c].children || [];
+            for (let i = 0; i < children.length; i++) {
+              const ch = children[i];
+              if (ch.id === id) return { node: ch, parent: node, ctx: { kind: 'columns', colIndex: c, index: i } };
+              const r = rec(ch, node);
+              if (r) return r;
+            }
+          }
+        }
+
+        // list
+        if (node.type === 'list') {
+          const items = node.properties.items || [];
+          for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            if (it && it.kind === 'node' && it.node) {
+              if (it.node.id === id) return { node: it.node, parent: node, ctx: { kind: 'listItems', index: i } };
+              const r = rec(it.node, node);
+              if (r) return r;
+            }
+          }
+        }
+
+        // table
+        if (node.type === 'table') {
+          const body = node.properties.body || [];
+          for (let r = 0; r < body.length; r++) {
+            for (let c = 0; c < body[r].length; c++) {
+              const cell = body[r][c];
+              const children = (cell && cell.children) ? cell.children : [];
+              for (let i = 0; i < children.length; i++) {
+                const ch = children[i];
+                if (ch.id === id) return { node: ch, parent: node, ctx: { kind: 'tableCell', row: r, col: c, index: i } };
+                const rr = rec(ch, node);
+                if (rr) return rr;
+              }
+            }
+          }
+        }
+
+        return null;
+      }
+
+      // Verificar header
+      if (documentHeader.root) {
+        if (documentHeader.root.id === id) {
+          return { node: documentHeader.root, parent: null, ctx: { kind: 'headerRoot' } };
+        }
+        const headerResult = rec(documentHeader.root, null);
+        if (headerResult) return headerResult;
+      }
+
+      // Verificar footer
+      if (documentFooter.root) {
+        if (documentFooter.root.id === id) {
+          return { node: documentFooter.root, parent: null, ctx: { kind: 'footerRoot' } };
+        }
+        const footerResult = rec(documentFooter.root, null);
+        if (footerResult) return footerResult;
+      }
+
+      // Verificar conteúdo principal
+      const root = getRootGroup();
+      if (!root) return null;
+      if (root.id === id) return { node: root, parent: null, ctx: null };
+
+      return rec(root, null);
+    }
+
+    function deleteSelected() {
+      if (!selectedElementId) return;
+      // IMPORTANTE: Resetar cache e permitir ajuste de tamanho apenas quando realmente deletamos um elemento
+      resetCanvasSizeCache();
+      allowCanvasSizeAdjust = true; // Permitir ajuste ao deletar elemento
+      const info = findNodeWithParent(selectedElementId);
+      if (!info || !info.parent) {
+        // Não deleta root do header/footer nem root principal
+        if (info && (info.ctx?.kind === 'headerRoot' || info.ctx?.kind === 'footerRoot')) {
+          return;
+        }
+        return;
+      }
+
+      const { parent, ctx } = info;
+      if (!ctx) return;
+
+      if (ctx.kind === 'groupChildren') {
+        parent.properties.children.splice(ctx.index, 1);
+      } else if (ctx.kind === 'columns') {
+        parent.properties.columns[ctx.colIndex].children.splice(ctx.index, 1);
+      } else if (ctx.kind === 'listItems') {
+        parent.properties.items.splice(ctx.index, 1);
+      } else if (ctx.kind === 'tableCell') {
+        parent.properties.body[ctx.row][ctx.col].children.splice(ctx.index, 1);
+      }
+
+      selectedElementId = parent.id;
+      resetCanvasSizeCache();
+      // Renderizar primeiro sem ajustar tamanho
+      renderAll(false);
+      // Depois, permitir ajuste e fazer ajuste único após um delay
+      setTimeout(() => {
+        allowCanvasSizeAdjust = true;
+        renderAll(true);
+        allowCanvasSizeAdjust = false;
+        // Atualizar visibilidade do botão "Salvar Template"
+        updateSaveTemplateButtonVisibility();
+      }, 100);
+      saveState();
+    }
+
+    function moveNodeUpDown(nodeId, dir) {
+      const info = findNodeWithParent(nodeId);
+      if (!info || !info.parent || !info.ctx) return;
+      const ctx = info.ctx;
+
+      function swap(arr, i, j) {
+        if (i < 0 || j < 0 || i >= arr.length || j >= arr.length) return;
+        const tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+      }
+
+      if (ctx.kind === 'groupChildren') {
+        swap(info.parent.properties.children, ctx.index, ctx.index + dir);
+      } else if (ctx.kind === 'columns') {
+        swap(info.parent.properties.columns[ctx.colIndex].children, ctx.index, ctx.index + dir);
+      } else if (ctx.kind === 'listItems') {
+        swap(info.parent.properties.items, ctx.index, ctx.index + dir);
+      } else if (ctx.kind === 'tableCell') {
+        swap(info.parent.properties.body[ctx.row][ctx.col].children, ctx.index, ctx.index + dir);
+      }
+
+      resetCanvasSizeCache();
+      // Renderizar primeiro sem ajustar tamanho
+      renderAll(false);
+      // Depois, permitir ajuste e fazer ajuste único após um delay
+      setTimeout(() => {
+        allowCanvasSizeAdjust = true;
+        renderAll(true);
+        allowCanvasSizeAdjust = false;
+      }, 100);
+    }
+
+    // -----------------------
+    // Drag and Drop
+    // -----------------------
+    // Funções de drag-and-drop - devem estar disponíveis globalmente ANTES do HTML
+    // Definir imediatamente no window para garantir disponibilidade
+    window.startDrag = function (type, event) {
+      if (typeof draggedType !== 'undefined') {
+        draggedType = type;
+      }
+      if (event && event.dataTransfer) {
+        event.dataTransfer.setData("text/plain", type);
+        event.dataTransfer.effectAllowed = "move";
+      }
+    };
+
+    window.handleDragOver = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const canvasEl = document.getElementById("canvas");
+      if (canvasEl) canvasEl.classList.add('drag-over');
+    };
+
+    window.handleDragLeave = function (e) {
+      const canvasEl = document.getElementById("canvas");
+      if (canvasEl && e.target === canvasEl) canvasEl.classList.remove('drag-over');
+    };
+
+    // Manter referências locais também
+    function startDrag(type, event) {
+      window.startDrag(type, event);
+    }
+
+    function handleDragOver(e) {
+      window.handleDragOver(e);
+    }
+
+    function handleDragLeave(e) {
+      window.handleDragLeave(e);
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (canvas) canvas.classList.remove('drag-over');
+
+      const type = (e.dataTransfer && e.dataTransfer.getData("text/plain")) || draggedType;
+      if (!type) return;
+
+      // Primeiro elemento TEM que ser group, como antes
+      if (!getRootGroup()) {
+        if (type !== 'group') {
+          if (typeof showAlertModal === 'function') {
+            showAlertModal(
+              'Erro ao Adicionar Elemento',
+              'O primeiro elemento no canvas deve ser um Grupo.\n\nPor favor, arraste um Grupo primeiro para começar a criar seu PDF.'
+            );
+          }
+          return;
+        }
+        resetCanvasSizeCache(); // Resetar cache quando conteúdo muda
+        const g = defaultElement('group');
+        elements = [g];
+        selectedElementId = g.id;
+        // Renderizar primeiro sem ajustar tamanho
+        renderAll(false);
+        // Depois, permitir ajuste e fazer ajuste único após um delay
+        setTimeout(() => {
+          allowCanvasSizeAdjust = true;
+          renderAll(true);
+          allowCanvasSizeAdjust = false;
+        }, 100);
+        return;
+      }
+
+      // Se caiu no canvas (fora de qualquer dropzone), insere no group root
+      insertIntoTarget({ kind: 'groupChildren', targetId: getRootGroup().id }, type);
+    }
+    window.handleDrop = handleDrop;
+
+    function insertIntoTarget(target, type) {
+      resetCanvasSizeCache(); // Resetar cache quando conteúdo muda
+      const root = getRootGroup();
+      const newEl = defaultElement(type);
+
+      // Verificar se é header ou footer
+      if (target.targetId === documentHeader.root?.id) {
+        if (!documentHeader.root.properties.children) {
+          documentHeader.root.properties.children = [];
+        }
+        documentHeader.root.properties.children.push(newEl);
+        selectedElementId = newEl.id;
+        // Renderizar primeiro sem ajustar tamanho
+        renderAll(false);
+        // Depois, permitir ajuste e fazer ajuste único após um delay
+        setTimeout(() => {
+          allowCanvasSizeAdjust = true;
+          renderAll(true);
+          allowCanvasSizeAdjust = false;
+        }, 100);
+        saveState();
+        return;
+      }
+
+      if (target.targetId === documentFooter.root?.id) {
+        if (!documentFooter.root.properties.children) {
+          documentFooter.root.properties.children = [];
+        }
+        documentFooter.root.properties.children.push(newEl);
+        selectedElementId = newEl.id;
+        // Renderizar primeiro sem ajustar tamanho
+        renderAll(false);
+        // Depois, permitir ajuste e fazer ajuste único após um delay
+        setTimeout(() => {
+          allowCanvasSizeAdjust = true;
+          renderAll(true);
+          allowCanvasSizeAdjust = false;
+        }, 100);
+        saveState();
+        return;
+      }
+
+      // Regras: se target for um elemento não-container, tenta usar o pai dele como container
+      // Aqui target já vem como "dropzone" de container, então é seguro.
+      if (!root) return;
+
+      if (target.kind === 'groupChildren') {
+        const group = findNodeById(target.targetId);
+        if (!group || group.type !== 'group') return;
+        group.properties.children.push(newEl);
+        selectedElementId = newEl.id;
+      }
+
+      if (target.kind === 'columnsCol') {
+        const columnsNode = findNodeById(target.targetId);
+        if (!columnsNode || columnsNode.type !== 'columns') return;
+        const colIndex = clamp(Number(target.colIndex || 0), 0, (columnsNode.properties.columns || []).length - 1);
+        columnsNode.properties.columns[colIndex].children.push(newEl);
+        selectedElementId = newEl.id;
+      }
+
+      if (target.kind === 'listItems') {
+        // Adicionar novo item à lista (quando solto no container, não em um item específico)
+        const listNode = findNodeById(target.targetId);
+        if (!listNode || listNode.type !== 'list') return;
+        listNode.properties.items.push({ kind: 'node', node: newEl });
+        selectedElementId = newEl.id;
+      }
+
+      if (target.kind === 'listItemReplace') {
+        // Substituir item existente na lista (quando solto em um item específico)
+        const listNode = findNodeById(target.targetId);
+        if (!listNode || listNode.type !== 'list') return;
+        const itemIndex = target.itemIndex !== undefined ? Number(target.itemIndex) : -1;
+        if (itemIndex >= 0 && itemIndex < listNode.properties.items.length) {
+          // Substituir o item existente
+          listNode.properties.items[itemIndex] = { kind: 'node', node: newEl };
+          selectedElementId = newEl.id;
+        } else {
+          // Fallback: adicionar novo item se índice inválido
+          listNode.properties.items.push({ kind: 'node', node: newEl });
+          selectedElementId = newEl.id;
+        }
+      }
+
+      if (target.kind === 'tableCell') {
+        const tableNode = findNodeById(target.targetId);
+        if (!tableNode || tableNode.type !== 'table') return;
+        const r = clamp(Number(target.row || 0), 0, (tableNode.properties.body || []).length - 1);
+        const c = clamp(Number(target.col || 0), 0, (tableNode.properties.body[r] || []).length - 1);
+
+        // Verificar se é header ou body (baseado em headerRows)
+        const headerRows = tableNode.properties.headerRows || 1;
+        const isHeaderRow = r < headerRows;
+
+        // Se o elemento inserido é texto, aplicar propriedades específicas da tabela
+        if (newEl.type === 'text') {
+          if (isHeaderRow) {
+            // Header: fontSize: 10, bold: true, alignment: 'center'
+            newEl.properties.fontSize = 10;
+            newEl.properties.bold = true;
+            newEl.properties.alignment = 'center';
+            // Aplicar também na célula
+            if (!tableNode.properties.body[r][c].fontSize) {
+              tableNode.properties.body[r][c].fontSize = 10;
+            }
+            if (tableNode.properties.body[r][c].bold === undefined) {
+              tableNode.properties.body[r][c].bold = true;
+            }
+            if (!tableNode.properties.body[r][c].alignment) {
+              tableNode.properties.body[r][c].alignment = 'center';
+            }
+          } else {
+            // Body: fontSize: 9, bold: false, alignment: 'center', verticalAlignment: 'middle'
+            newEl.properties.fontSize = 9;
+            newEl.properties.bold = false;
+            newEl.properties.alignment = 'center';
+            // Aplicar também na célula
+            if (!tableNode.properties.body[r][c].fontSize) {
+              tableNode.properties.body[r][c].fontSize = 9;
+            }
+            if (tableNode.properties.body[r][c].bold === undefined) {
+              tableNode.properties.body[r][c].bold = false;
+            }
+            if (!tableNode.properties.body[r][c].alignment) {
+              tableNode.properties.body[r][c].alignment = 'center';
+            }
+            // verticalAlignment deve estar na célula, não no texto
+            if (!tableNode.properties.body[r][c].verticalAlignment) {
+              tableNode.properties.body[r][c].verticalAlignment = 'middle';
+            }
+          }
+        }
+
+        tableNode.properties.body[r][c].children.push(newEl);
+        selectedElementId = newEl.id;
+      }
+
+      // Renderizar primeiro sem ajustar tamanho
+      renderAll(false);
+      // Depois, permitir ajuste e fazer ajuste único após um delay para garantir que DOM está pronto
+      setTimeout(() => {
+        allowCanvasSizeAdjust = true;
+        renderAll(true);
+        allowCanvasSizeAdjust = false;
+      }, 100);
+      saveState();
+    }
+
+    // dropzone handlers (delegação)
+    function onDropZoneOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dz = e.currentTarget;
+      dz.classList.add('drag-over');
+    }
+    function onDropZoneLeave(e) {
+      e.preventDefault();
+      const dz = e.currentTarget;
+      dz.classList.remove('drag-over');
+    }
+    function onDropZoneDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const dz = e.currentTarget;
+      dz.classList.remove('drag-over');
+
+      // Remover feedback visual se for um item de lista
+      if (dz.tagName === 'LI' && dz.style.backgroundColor) {
+        dz.style.backgroundColor = '';
+        dz.style.borderColor = '#9ca3af';
+      }
+
+      const type = (e.dataTransfer && e.dataTransfer.getData("text/plain")) || draggedType;
+      if (!type) return;
+
+      const kind = dz.getAttribute('data-drop-kind');
+      const targetId = dz.getAttribute('data-target-id');
+      const colIndex = dz.getAttribute('data-col-index');
+      const row = dz.getAttribute('data-row');
+      const col = dz.getAttribute('data-col');
+      const itemIndex = dz.getAttribute('data-item-index'); // Para substituir item de lista
+
+      insertIntoTarget({ kind, targetId, colIndex, row, col, itemIndex }, type);
+    }
+
+    // -----------------------
+    // Rendering
+    // -----------------------
+
+    // Função para converter URL de imagem para base64 (apenas para preview visual)
+    async function convertImageUrlToBase64(url) {
+      try {
+        // Se já for base64, retornar como está
+        if (url.startsWith('data:image/')) {
+          return url;
+        }
+
+        // Fazer fetch da imagem
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+
+        // Converter blob para base64
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve(reader.result);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (error) {
+        console.warn('Erro ao converter imagem para base64:', error);
+        return null;
+      }
+    }
+
+    function applyZoom() {
+      const z = zoom;
+      const canvas = document.getElementById('canvas');
+      if (canvas) {
+        canvas.style.transformOrigin = 'top center';
+        canvas.style.transform = `scale(${z})`;
+      }
+      // Remover transform do elementsList para evitar duplicação
+      if (elementsList) {
+        elementsList.style.transform = '';
+        elementsList.style.transformOrigin = '';
+      }
+    }
+
+    function elementLabel(el) {
+      const map = {
+        group: 'Grupo',
+        header: 'Cabeçalho',
+        text: 'Texto',
+        image: 'Imagem',
+        table: 'Tabela',
+        columns: 'Colunas',
+        list: 'Lista',
+        margin: 'Espaço',
+        pageBreak: 'Quebra Página'
+      };
+      return map[el.type] || el.type;
+    }
+
+    function createControls(el) {
+      const controls = document.createElement('div');
+      controls.className = 'element-controls';
+      controls.style.display = 'none';
+      return controls;
+    }
+    function renderElementRecursive(el) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'element-item';
+      wrapper.setAttribute('data-id', el.id);
+      wrapper.draggable = false;
+
+      if (el.type === 'group') wrapper.classList.add('element-group');
+      if (el.type === 'image') {
+        wrapper.classList.add('element-image');
+        // Aplicar posicionamento absoluto/relativo no wrapper principal se existir
+        if (el.properties.absolutePosition) {
+          wrapper.style.position = 'absolute';
+          wrapper.style.left = `${el.properties.absolutePosition.x || 0}px`;
+          wrapper.style.top = `${el.properties.absolutePosition.y || 0}px`;
+          wrapper.style.zIndex = '10';
+        } else if (el.properties.relativePosition) {
+          wrapper.style.position = 'relative';
+          wrapper.style.left = `${el.properties.relativePosition.x || 0}px`;
+          wrapper.style.top = `${el.properties.relativePosition.y || 0}px`;
+        }
+      }
+
+      if (el.id === selectedElementId) wrapper.classList.add('selected');
+
+      wrapper.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        selectElement(el.id);
+      });
+
+      // (UI) controles inline desabilitados: edição/remoção apenas via painel Editor
+      // Preview content
+      const preview = document.createElement('div');
+      preview.className = 'element-preview';
+
+      // --- Types ---
+      if (el.type === 'group') {
+        const childWrap = document.createElement('div');
+        childWrap.className = 'group-children ' + (el.properties.orientation === 'row' ? 'orientation-row' : 'orientation-column');
+
+        // dropzone do group (children)
+        childWrap.setAttribute('data-drop-kind', 'groupChildren');
+        childWrap.setAttribute('data-target-id', el.id);
+        childWrap.addEventListener('dragover', onDropZoneOver);
+        childWrap.addEventListener('dragleave', onDropZoneLeave);
+        childWrap.addEventListener('drop', onDropZoneDrop);
+
+        const children = el.properties.children || [];
+        if (children.length === 0) {
+          const ph = document.createElement('div');
+          ph.className = 'group-placeholder';
+          ph.textContent = 'Arraste elementos aqui';
+          childWrap.appendChild(ph);
+        } else {
+          children.forEach(ch => {
+            const childBox = document.createElement('div');
+            //childBox.className = 'group-child-item';
+
+            childBox.className = 'group-child-sem-abas';
+            // no modo row, evita "estourar" e respeita a página
+            if (el.properties.orientation === 'row') {
+              childBox.style.flex = '1 1 0';
+              childBox.style.minWidth = '0';
+            } else {
+              childBox.style.width = '100%';
+            }
+            childBox.appendChild(renderElementRecursive(ch));
+            childWrap.appendChild(childBox);
+          });
+        }
+
+        preview.appendChild(childWrap);
+      }
+      else if (el.type === 'header') {
+        const div = document.createElement('div');
+        div.className = 'preview-header';
+        div.textContent = el.properties.text || 'Cabeçalho';
+        div.style.textAlign = (el.properties.alignment || 'center');
+        if (el.properties.color) div.style.color = el.properties.color;
+        if (el.properties.background) div.style.backgroundColor = el.properties.background;
+        if (el.properties.fontSize) div.style.fontSize = `${el.properties.fontSize}px`;
+        if (el.properties.bold) div.style.fontWeight = 'bold';
+        if (el.properties.decoration === 'underline') div.style.textDecoration = 'underline';
+        if (el.properties.decoration === 'lineThrough') div.style.textDecoration = 'line-through';
+        if (el.properties.decoration === 'overline') div.style.textDecoration = 'overline';
+        if (el.properties.link) {
+          div.style.cursor = 'pointer';
+          div.style.textDecoration = 'underline';
+          div.style.color = el.properties.color || '#0066cc';
+          div.title = `Link: ${el.properties.link}`;
+        }
+        preview.appendChild(div);
+      }
+      else if (el.type === 'text') {
+        const div = document.createElement('div');
+        div.className = 'preview-text';
+        let textContent = el.properties.text || 'Texto...';
+        // Se estiver em header/footer e tiver placeholders, mostrar exemplo no preview
+        const isInHeader = isElementInHeader(el.id);
+        const isInFooter = isElementInFooter(el.id);
+        if ((isInHeader || isInFooter) && textContent.includes('{{')) {
+          textContent = textContent
+            .replace(/\{\{pageNumber\}\}/g, '1')
+            .replace(/\{\{totalPages\}\}/g, '10');
+        }
+        div.textContent = textContent;
+        div.style.textAlign = (el.properties.alignment || 'left');
+        if (el.properties.color) div.style.color = el.properties.color;
+        if (el.properties.background) div.style.backgroundColor = el.properties.background;
+        if (el.properties.fontSize) div.style.fontSize = `${el.properties.fontSize}px`;
+        if (el.properties.bold) div.style.fontWeight = 'bold';
+        if (el.properties.italics) div.style.fontStyle = 'italic';
+        if (el.properties.decoration === 'underline') div.style.textDecoration = 'underline';
+        if (el.properties.decoration === 'lineThrough') div.style.textDecoration = 'line-through';
+        if (el.properties.decoration === 'overline') div.style.textDecoration = 'overline';
+        if (el.properties.link) {
+          div.style.cursor = 'pointer';
+          div.style.textDecoration = 'underline';
+          div.style.color = el.properties.color || '#0066cc';
+          div.title = `Link: ${el.properties.link}`;
+        }
+        preview.appendChild(div);
+      }
+      else if (el.type === 'image') {
+        const box = document.createElement('div');
+        box.className = 'preview-image';
+        const url = el.properties.url || '';
+        const borderRadius = el.properties.borderRadius || 0;
+        const opacity = el.properties.opacity !== undefined ? el.properties.opacity : 1;
+
+        // Determinar dimensões para preview
+        let previewWidth = '200px';
+        let previewHeight = 'auto';
+        if (el.properties.fit && Array.isArray(el.properties.fit)) {
+          previewWidth = `${el.properties.fit[0]}px`;
+          previewHeight = `${el.properties.fit[1]}px`;
+        } else if (el.properties.cover) {
+          previewWidth = `${el.properties.cover.width || 300}px`;
+          previewHeight = `${el.properties.cover.height || 150}px`;
+        } else {
+          if (el.properties.width) previewWidth = `${el.properties.width}px`;
+          if (el.properties.height) previewHeight = `${el.properties.height}px`;
+        }
+
+        // Aplicar dimensões ao box também para garantir que o wrapper tenha o tamanho correto
+        box.style.width = previewWidth;
+        if (previewHeight !== 'auto') {
+          box.style.height = previewHeight;
+        }
+
+        if (url) {
+          const img = document.createElement('img');
+          // Usar base64 para preview se disponível, senão usar URL original
+          const imageSrc = el.properties._base64Preview || url;
+          img.src = imageSrc;
+          img.style.width = previewWidth;
+          img.style.height = previewHeight;
+          img.style.opacity = opacity;
+
+          // Aplicar object-fit baseado no modo
+          if (el.properties.fit) {
+            img.style.objectFit = 'contain';
+          } else if (el.properties.cover) {
+            img.style.objectFit = 'cover';
+          } else {
+            img.style.objectFit = 'contain';
+          }
+
+          if (borderRadius > 0) {
+            img.style.borderRadius = `${borderRadius}px`;
+          }
+
+          // Se não há base64 e é uma URL HTTP/HTTPS, tentar converter em background
+          if (!el.properties._base64Preview && (url.startsWith('http://') || url.startsWith('https://'))) {
+            // Tentar converter para base64 em background (não bloqueia a renderização)
+            convertImageUrlToBase64(url).then(base64 => {
+              if (base64 && el.properties.url === url) {
+                el.properties._base64Preview = base64;
+                img.src = base64;
+              }
+            }).catch(() => {
+              // Silenciosamente falhar - manter URL original
+            });
+          }
+
+          img.onerror = () => {
+            img.style.display = 'none';
+            const ph = document.createElement('div');
+            ph.className = 'preview-image-box';
+            ph.style.width = previewWidth;
+            ph.style.height = previewHeight === 'auto' ? '150px' : previewHeight;
+            ph.textContent = 'Erro ao carregar';
+            box.appendChild(ph);
+          };
+          box.appendChild(img);
+        } else {
+          const ph = document.createElement('div');
+          ph.className = 'preview-image-box';
+          ph.style.width = previewWidth;
+          ph.style.height = previewHeight === 'auto' ? '150px' : previewHeight;
+          ph.textContent = 'Imagem';
+          box.appendChild(ph);
+        }
+
+        // Posicionamento já aplicado no wrapper principal, não precisa aplicar aqui novamente
+        // Apenas garantir que o box não tenha posicionamento próprio
+        box.style.position = 'static';
+
+        preview.appendChild(box);
+      }
+      else if (el.type === 'columns') {
+        const colsWrap = document.createElement('div');
+        colsWrap.className = 'preview-columns';
+        colsWrap.style.gap = (Number(el.properties.gap || 10)) + 'px';
+
+        // Aplicar alinhamento vertical se configurado
+        if (el.properties.valign) {
+          if (el.properties.valign === 'center') {
+            colsWrap.style.alignItems = 'center';
+          } else if (el.properties.valign === 'bottom') {
+            colsWrap.style.alignItems = 'flex-end';
+          } else {
+            colsWrap.style.alignItems = 'flex-start';
+          }
+        }
+
+        const cols = el.properties.columns || [];
+        cols.forEach((col, idx) => {
+          const colDiv = document.createElement('div');
+          colDiv.className = 'preview-column';
+
+          // Aplicar largura da coluna
+          const width = col.width || '*';
+          if (width === '*' || width === 'auto') {
+            colDiv.style.flex = '1 1 0';
+          } else if (typeof width === 'number') {
+            colDiv.style.width = `${width}px`;
+            colDiv.style.flex = '0 0 auto';
+          } else if (typeof width === 'string' && width.endsWith('%')) {
+            const percent = parseFloat(width.replace('%', '')) || 0;
+            colDiv.style.width = `${percent}%`;
+            colDiv.style.flex = '0 0 auto';
+          } else {
+            colDiv.style.flex = '1 1 0';
+          }
+
+          // dropzone por coluna
+          colDiv.setAttribute('data-drop-kind', 'columnsCol');
+          colDiv.setAttribute('data-target-id', el.id);
+          colDiv.setAttribute('data-col-index', String(idx));
+          colDiv.addEventListener('dragover', onDropZoneOver);
+          colDiv.addEventListener('dragleave', onDropZoneLeave);
+          colDiv.addEventListener('drop', onDropZoneDrop);
+
+          const kids = col.children || [];
+          if (kids.length === 0) {
+            const ph = document.createElement('div');
+            ph.className = 'smallNote';
+            ph.textContent = `Coluna ${idx + 1}: arraste aqui`;
+            colDiv.appendChild(ph);
+          } else {
+            kids.forEach(k => colDiv.appendChild(renderElementRecursive(k)));
+          }
+          colsWrap.appendChild(colDiv);
+        });
+
+        preview.appendChild(colsWrap);
+      }
+      else if (el.type === 'list') {
+        const list = document.createElement(el.properties.listType === 'ol' ? 'ol' : 'ul');
+        list.className = 'preview-list';
+
+        // dropzone no container da lista (para adicionar novos itens quando solto fora dos itens existentes)
+        list.setAttribute('data-drop-kind', 'listItems');
+        list.setAttribute('data-target-id', el.id);
+        list.addEventListener('dragover', onDropZoneOver);
+        list.addEventListener('dragleave', onDropZoneLeave);
+        list.addEventListener('drop', onDropZoneDrop);
+
+        const items = el.properties.items || [];
+        if (items.length === 0) {
+          const li = document.createElement('li');
+          li.textContent = 'Arraste aqui para adicionar item';
+          list.appendChild(li);
+        } else {
+          items.forEach((it, idx) => {
+            const li = document.createElement('li');
+            li.style.border = '1px dashed #9ca3af';
+            li.style.borderRadius = '0.5rem';
+            li.style.padding = '0.5rem';
+            li.style.marginBottom = '0.5rem';
+            li.style.minHeight = '2rem';
+            li.style.position = 'relative';
+
+            // Dropzone individual para cada item (permite substituir o conteúdo)
+            li.setAttribute('data-drop-kind', 'listItemReplace');
+            li.setAttribute('data-target-id', el.id);
+            li.setAttribute('data-item-index', String(idx));
+
+            // Handlers separados para garantir que o item tenha prioridade sobre o container
+            li.addEventListener('dragover', (e) => {
+              e.preventDefault();
+              e.stopPropagation(); // Impede que o evento chegue ao container da lista
+              li.classList.add('drag-over');
+              li.style.backgroundColor = '#e0f2fe';
+              li.style.borderColor = '#0284c7';
+            });
+
+            li.addEventListener('dragleave', (e) => {
+              e.stopPropagation();
+              li.classList.remove('drag-over');
+              li.style.backgroundColor = '';
+              li.style.borderColor = '#9ca3af';
+            });
+
+            li.addEventListener('drop', (e) => {
+              e.preventDefault();
+              e.stopPropagation(); // CRÍTICO: impede que o evento chegue ao container da lista
+              li.classList.remove('drag-over');
+              li.style.backgroundColor = '';
+              li.style.borderColor = '#9ca3af';
+
+              const type = (e.dataTransfer && e.dataTransfer.getData("text/plain")) || draggedType;
+              if (!type) return;
+
+              // Chamar insertIntoTarget diretamente para substituir o item
+              insertIntoTarget({
+                kind: 'listItemReplace',
+                targetId: el.id,
+                itemIndex: idx
+              }, type);
+            });
+
+            if (it.kind === 'text') {
+              li.textContent = it.text || '';
+            } else if (it.kind === 'node' && it.node) {
+              li.appendChild(renderElementRecursive(it.node));
+            }
+            list.appendChild(li);
+          });
+        }
+        preview.appendChild(list);
+      }
+      else if (el.type === 'table') {
+        const tbl = document.createElement('table');
+        tbl.className = 'preview-table';
+
+        const body = el.properties.body || [];
+        const heights = el.properties.heights;
+        const customLayout = el.properties.customLayout || {};
+
+        // Aplicar bordas da tabela baseado no layout customizado
+        // Se hLineWidth ou vLineWidth estiverem definidos, aplicar bordas
+        const hLineWidth = customLayout.hLineWidth !== undefined ? Number(customLayout.hLineWidth) : null;
+        const vLineWidth = customLayout.vLineWidth !== undefined ? Number(customLayout.vLineWidth) : null;
+        const hLineColor = customLayout.hLineColor || '#000000';
+        const vLineColor = customLayout.vLineColor || '#000000';
+
+        // Se layout for customizado, aplicar bordas dinamicamente
+        if (el.properties.layout === 'custom' && (hLineWidth !== null || vLineWidth !== null)) {
+          // Aplicar bordas baseadas nas configurações
+          if (hLineWidth !== null && hLineWidth > 0) {
+            tbl.style.borderTop = `${hLineWidth}px solid ${hLineColor}`;
+            tbl.style.borderBottom = `${hLineWidth}px solid ${hLineColor}`;
+          }
+          if (vLineWidth !== null && vLineWidth > 0) {
+            tbl.style.borderLeft = `${vLineWidth}px solid ${vLineColor}`;
+            tbl.style.borderRight = `${vLineWidth}px solid ${vLineColor}`;
+          }
+        }
+
+        for (let r = 0; r < body.length; r++) {
+          const tr = document.createElement('tr');
+          const isHeaderRow = r === 0; // Primeira linha é o cabeçalho
+
+          // Aplicar altura da linha (heights)
+          if (heights) {
+            if (typeof heights === 'number') {
+              tr.style.height = heights + 'px';
+            } else if (Array.isArray(heights) && heights[r] !== undefined) {
+              tr.style.height = heights[r] + 'px';
+            }
+          }
+
+          // Aplicar bordas horizontais baseadas no layout customizado
+          if (el.properties.layout === 'custom' && hLineWidth !== null && hLineWidth > 0) {
+            // Aplicar borda inferior em todas as linhas
+            tr.style.borderBottom = `${hLineWidth}px solid ${hLineColor}`;
+            // Aplicar borda superior na primeira linha
+            if (r === 0) {
+              tr.style.borderTop = `${hLineWidth}px solid ${hLineColor}`;
+            }
+          } else if (isHeaderRow) {
+            // Layout padrão - apenas borda no cabeçalho
+            tr.style.backgroundColor = '#f3f4f6';
+            tr.style.fontWeight = 'bold';
+            tr.style.borderBottom = '2px solid #d1d5db';
+          }
+
+          // Rastrear células já cobertas por rowSpan/colSpan
+          const coveredCells = new Set();
+
+          for (let c = 0; c < body[r].length; c++) {
+            // Pular células já cobertas por colSpan
+            if (coveredCells.has(`${r}-${c}`)) {
+              continue;
+            }
+
+            const td = document.createElement('td');
+            td.style.verticalAlign = 'top';
+            const cell = body[r][c];
+
+            // Se layout customizado estiver ativo, remover bordas padrão do CSS
+            if (el.properties.layout === 'custom') {
+              td.style.border = 'none'; // Remover borda padrão
+            }
+
+            // Aplicar bordas verticais baseadas no layout customizado
+            if (el.properties.layout === 'custom' && vLineWidth !== null && vLineWidth > 0) {
+              // Aplicar borda direita em todas as células (exceto a última coluna)
+              if (c < body[r].length - 1) {
+                td.style.borderRight = `${vLineWidth}px solid ${vLineColor}`;
+              }
+              // Aplicar borda esquerda na primeira coluna
+              if (c === 0) {
+                td.style.borderLeft = `${vLineWidth}px solid ${vLineColor}`;
+              }
+            }
+
+            // Aplicar bordas horizontais baseadas no layout customizado (nas células)
+            if (el.properties.layout === 'custom' && hLineWidth !== null && hLineWidth > 0) {
+              // Aplicar borda superior na primeira linha
+              if (r === 0) {
+                td.style.borderTop = `${hLineWidth}px solid ${hLineColor}`;
+              }
+              // Aplicar borda inferior em todas as linhas
+              td.style.borderBottom = `${hLineWidth}px solid ${hLineColor}`;
+            }
+
+            // Verificar se esta célula está vazia (string vazia ou null)
+            if (!cell || (typeof cell === 'string' && cell === '')) {
+              // Célula vazia - renderizar como vazia mas ainda adicionar à linha
+              tr.appendChild(td);
+              continue;
+            }
+
+            // Se não for objeto, tratar como string simples
+            const cellObj = (typeof cell === 'object' && cell !== null) ? cell : { children: [] };
+
+            // Aplicar rowSpan e colSpan
+            if (cellObj.rowSpan && cellObj.rowSpan > 1) {
+              td.setAttribute('rowspan', cellObj.rowSpan);
+              // Marcar células abaixo como cobertas
+              for (let sr = 1; sr < cellObj.rowSpan; sr++) {
+                coveredCells.add(`${r + sr}-${c}`);
+              }
+            }
+            if (cellObj.colSpan && cellObj.colSpan > 1) {
+              td.setAttribute('colspan', cellObj.colSpan);
+              // Marcar células à direita como cobertas
+              for (let sc = 1; sc < cellObj.colSpan; sc++) {
+                coveredCells.add(`${r}-${c + sc}`);
+              }
+            }
+
+            // Aplicar border (array de 4 booleanos) - sobrescreve bordas do layout customizado se definido
+            if (cellObj.border && Array.isArray(cellObj.border)) {
+              if (!cellObj.border[0]) td.style.borderLeft = 'none';
+              if (!cellObj.border[1]) td.style.borderTop = 'none';
+              if (!cellObj.border[2]) td.style.borderRight = 'none';
+              if (!cellObj.border[3]) td.style.borderBottom = 'none';
+            }
+
+            // Aplicar borderColor (array de 4 cores) - sobrescreve cores do layout customizado se definido
+            if (cellObj.borderColor && Array.isArray(cellObj.borderColor)) {
+              if (cellObj.borderColor[0]) td.style.borderLeftColor = cellObj.borderColor[0];
+              if (cellObj.borderColor[1]) td.style.borderTopColor = cellObj.borderColor[1];
+              if (cellObj.borderColor[2]) td.style.borderRightColor = cellObj.borderColor[2];
+              if (cellObj.borderColor[3]) td.style.borderBottomColor = cellObj.borderColor[3];
+            }
+
+            // Aplicar estilos da célula (fillColor, color, fillOpacity)
+            // Tabela zebrada tem prioridade sobre fillColor individual
+            if (el.properties.zebraEnabled && el.properties.zebraColor) {
+              // Aplicar zebra seguindo o padrão do exemplo: linhas pares (0, 2, 4...) = cor, linhas ímpares (1, 3, 5...) = null
+              // Mas cabeçalho (r=0) não recebe zebra
+              if (!isHeaderRow && r % 2 === 0) {
+                const baseColor = el.properties.zebraColor;
+                td.style.backgroundColor = baseColor;
+              } else if (!isHeaderRow) {
+                // Linhas ímpares = transparente (null no PDF)
+                td.style.backgroundColor = 'transparent';
+              }
+            } else if (cellObj.fillColor) {
+              const opacity = cellObj.fillOpacity !== undefined ? cellObj.fillOpacity : 1;
+              td.style.backgroundColor = cellObj.fillColor;
+              td.style.opacity = opacity;
+            } else if (isHeaderRow) {
+              td.style.backgroundColor = '#f9fafb';
+            }
+
+            if (cellObj.color) {
+              td.style.color = cellObj.color;
+            }
+
+            // Padding padrão ou customizado
+            if (el.properties.customLayout) {
+              const cl = el.properties.customLayout;
+              td.style.paddingLeft = (cl.paddingLeft || 5) + 'px';
+              td.style.paddingRight = (cl.paddingRight || 5) + 'px';
+              td.style.paddingTop = (cl.paddingTop || 5) + 'px';
+              td.style.paddingBottom = (cl.paddingBottom || 5) + 'px';
+            } else if (isHeaderRow) {
+              td.style.padding = '0.5rem';
+            }
+
+            // dropzone por célula
+            td.setAttribute('data-drop-kind', 'tableCell');
+            td.setAttribute('data-target-id', el.id);
+            td.setAttribute('data-row', String(r));
+            td.setAttribute('data-col', String(c));
+            td.addEventListener('dragover', onDropZoneOver);
+            td.addEventListener('dragleave', onDropZoneLeave);
+            td.addEventListener('drop', onDropZoneDrop);
+
+            const kids = (cellObj.children || []);
+            if (kids.length === 0) {
+              const placeholderColor = cellObj.color || (isHeaderRow ? '#6b7280' : '#9ca3af');
+              if (isHeaderRow) {
+                td.innerHTML = `<span style="color:${placeholderColor};font-size:12px;font-weight:bold;">Cabeçalho ${c + 1} - Arraste aqui</span>`;
+              } else {
+                td.innerHTML = `<span style="color:${placeholderColor};font-size:12px">Arraste aqui</span>`;
+              }
+            } else {
+              kids.forEach(k => td.appendChild(renderElementRecursive(k)));
+            }
+            tr.appendChild(td);
+          }
+          tbl.appendChild(tr);
+        }
+        preview.appendChild(tbl);
+      }
+      else if (el.type === 'margin') {
+        const div = document.createElement('div');
+        div.className = 'preview-margin';
+        const marginSize = Number(el.properties.size || 20);
+        div.style.height = `${marginSize}px`;
+        div.style.minHeight = `${marginSize}px`;
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.justifyContent = 'center';
+        div.textContent = `Espaço (${marginSize}px)`;
+        preview.appendChild(div);
+      }
+      else if (el.type === 'pageBreak') {
+        const div = document.createElement('div');
+        div.className = 'preview-pagebreak';
+        div.textContent = 'Quebra de página';
+        preview.appendChild(div);
+      }
+      else if (el.type === 'qr') {
+        const box = document.createElement('div');
+        box.className = 'preview-qr';
+        box.style.width = `${el.properties.fit || 100}px`;
+        box.style.height = `${el.properties.fit || 100}px`;
+        box.style.border = `2px solid ${el.properties.foreground || '#000000'}`;
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        box.style.background = el.properties.background || '#ffffff';
+        const foregroundColor = el.properties.foreground || '#000000';
+        box.innerHTML = `<div style="font-size: 0.75rem; color: ${foregroundColor}; font-weight: bold;">QR Code</div>`;
+        preview.appendChild(box);
+      }
+      else if (el.type === 'svg') {
+        const box = document.createElement('div');
+        box.className = 'preview-svg';
+        box.style.width = `${el.properties.width || 100}px`;
+        box.style.height = `${el.properties.height || 100}px`;
+        box.style.border = '1px solid #d1d5db';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        try {
+          // Tentar renderizar o SVG
+          const parser = new DOMParser();
+          const svgDoc = parser.parseFromString(el.properties.svg || '', 'image/svg+xml');
+          const svgElement = svgDoc.documentElement;
+          if (svgElement && svgElement.tagName === 'svg') {
+            svgElement.setAttribute('width', el.properties.width || 100);
+            svgElement.setAttribute('height', el.properties.height || 100);
+            if (el.properties.color) {
+              svgElement.setAttribute('fill', el.properties.color);
+            }
+            box.appendChild(svgElement);
+          } else {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">SVG</div>';
+          }
+        } catch (e) {
+          box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Erro no SVG</div>';
+        }
+        preview.appendChild(box);
+      }
+      else if (el.type === 'barcode') {
+        const box = document.createElement('div');
+        box.className = 'preview-barcode';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        box.style.padding = '1rem';
+        box.style.minHeight = '60px';
+        box.style.border = '1px solid #d1d5db';
+        box.style.borderRadius = '0.375rem';
+        box.style.background = '#ffffff';
+
+        try {
+          // Gerar SVG do barcode usando JsBarcode
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          const p = el.properties || {};
+
+          if (typeof JsBarcode !== 'undefined') {
+            JsBarcode(svg, p.barcodeValue || "", {
+              format: p.format || "CODE128",
+              width: Number(p.lineWidth) || 1.5,
+              height: Number(p.barHeight) || 30,
+              displayValue: p.displayValue !== false,
+              fontSize: Number(p.fontSize) || 10,
+              margin: Number(p.margin) || 0
+            });
+            box.appendChild(svg);
+          } else {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">Barcode: ' + escapeHtml(p.barcodeValue || '') + '</div>';
+          }
+        } catch (e) {
+          box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Barcode inválido</div>';
+        }
+
+        preview.appendChild(box);
+      }
+      else if (el.type === 'stamp') {
+        const box = document.createElement('div');
+        box.className = 'preview-stamp';
+        const p = el.properties || {};
+        const fit = Array.isArray(p.fit) ? p.fit : [p.fit || 120, p.fit || 120];
+        box.style.width = `${fit[0]}px`;
+        box.style.height = `${fit[1]}px`;
+        box.style.border = '1px solid #d1d5db';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+        box.style.background = '#f9fafb';
+        box.style.opacity = p.opacity !== undefined ? p.opacity : 1;
+
+        if (p.sourceType === 'image' && p.value) {
+          const img = document.createElement('img');
+          img.src = p.value;
+          img.style.maxWidth = '100%';
+          img.style.maxHeight = '100%';
+          img.style.objectFit = 'contain';
+          img.onerror = () => {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Erro ao carregar imagem</div>';
+          };
+          box.appendChild(img);
+        } else if (p.sourceType === 'svg' && p.value) {
+          try {
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(p.value, 'image/svg+xml');
+            const svgElement = svgDoc.documentElement;
+            if (svgElement && svgElement.tagName === 'svg') {
+              svgElement.setAttribute('width', fit[0]);
+              svgElement.setAttribute('height', fit[1]);
+              box.appendChild(svgElement);
+            } else {
+              box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">Carimbo / Selo</div>';
+            }
+          } catch (e) {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Erro no SVG</div>';
+          }
+        } else {
+          box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">Carimbo / Selo</div>';
+        }
+        preview.appendChild(box);
+      }
+      else if (el.type === 'checkbox' || el.type === 'radio') {
+        const box = document.createElement('div');
+        box.className = `preview-${el.type}`;
+        const p = el.properties || {};
+        const choiceType = p.choiceType || el.type;
+        const choiceText = p.choiceText || 'Texto...';
+        const choiceChecked = p.choiceChecked === true;
+        const choiceIconPosition = p.choiceIconPosition || 'before';
+        const choiceGap = Number(p.choiceGap || 8);
+        const choiceIconSize = Number(p.choiceIconSize || 12);
+
+        box.style.display = 'flex';
+        box.style.flexDirection = 'row';
+        box.style.alignItems = 'center';
+        box.style.gap = `${choiceGap}px`;
+        box.style.justifyContent = p.alignment === 'center' ? 'center' : p.alignment === 'right' ? 'flex-end' : 'flex-start';
+        box.style.width = '100%';
+        box.style.minHeight = `${choiceIconSize + 4}px`;
+
+        // Função para gerar SVG do ícone
+        function generateIconSVG(type, checked, size) {
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.setAttribute('width', size);
+          svg.setAttribute('height', size);
+          svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+          svg.style.flexShrink = '0';
+
+          if (type === 'checkbox') {
+            const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rect.setAttribute('x', '1');
+            rect.setAttribute('y', '1');
+            rect.setAttribute('width', size - 2);
+            rect.setAttribute('height', size - 2);
+            rect.setAttribute('fill', 'none');
+            rect.setAttribute('stroke', '#000');
+            rect.setAttribute('stroke-width', '1');
+            svg.appendChild(rect);
+
+            if (checked) {
+              const check = document.createElementNS("http://www.w3.org/2000/svg", "path");
+              check.setAttribute('d', `M 3 ${size * 0.5} L ${size * 0.4} ${size * 0.7} L ${size * 0.8} ${size * 0.3}`);
+              check.setAttribute('fill', 'none');
+              check.setAttribute('stroke', '#000');
+              check.setAttribute('stroke-width', '1.3');
+              check.setAttribute('stroke-linecap', 'round');
+              check.setAttribute('stroke-linejoin', 'round');
+              svg.appendChild(check);
+            }
+          } else if (type === 'radio') {
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute('cx', size / 2);
+            circle.setAttribute('cy', size / 2);
+            circle.setAttribute('r', size / 2 - 1);
+            circle.setAttribute('fill', 'none');
+            circle.setAttribute('stroke', '#000');
+            circle.setAttribute('stroke-width', '1');
+            svg.appendChild(circle);
+
+            if (checked) {
+              const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+              dot.setAttribute('cx', size / 2);
+              dot.setAttribute('cy', size / 2);
+              dot.setAttribute('r', size / 4);
+              dot.setAttribute('fill', '#000');
+              svg.appendChild(dot);
+            }
+          }
+
+          return svg;
+        }
+
+        const iconSVG = generateIconSVG(choiceType, choiceChecked, choiceIconSize);
+        const textDiv = document.createElement('div');
+        textDiv.textContent = choiceText;
+        textDiv.style.flex = '1';
+        textDiv.style.fontSize = '14px';
+        textDiv.style.color = '#111827';
+
+        if (choiceIconPosition === 'before') {
+          box.appendChild(iconSVG);
+          box.appendChild(textDiv);
+        } else {
+          box.appendChild(textDiv);
+          box.appendChild(iconSVG);
+        }
+
+        preview.appendChild(box);
+      }
+      else if (el.type === 'fillLine') {
+        const box = document.createElement('div');
+        box.className = 'preview-fillline';
+        const p = el.properties || {};
+        const lineWidth = Number(p.lineWidth || 200);
+        const thickness = Number(p.thickness || 0.8);
+        const color = p.color || '#000000';
+
+        box.style.width = `${lineWidth}px`;
+        box.style.height = `${thickness + 4}px`;
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = p.alignment === 'center' ? 'center' : p.alignment === 'right' ? 'flex-end' : 'flex-start';
+
+        const line = document.createElement('div');
+        line.style.width = `${lineWidth}px`;
+        line.style.height = `${thickness}px`;
+        line.style.backgroundColor = color;
+        line.style.borderRadius = '1px';
+        box.appendChild(line);
+        preview.appendChild(box);
+      }
+      else if (el.type === 'chart') {
+        const box = document.createElement('div');
+        box.className = 'preview-chart';
+        const p = el.properties || {};
+        const width = Number(p.chartWidth || 400);
+        const height = Number(p.chartHeight || 200);
+
+        box.style.width = `${width}px`;
+        box.style.height = `${height}px`;
+        box.style.border = '1px solid #d1d5db';
+        box.style.borderRadius = '0.375rem';
+        box.style.background = p.chartBackgroundColor || '#FFFFFF';
+        box.style.position = 'relative';
+        box.style.display = 'flex';
+        box.style.alignItems = 'center';
+        box.style.justifyContent = 'center';
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.maxWidth = '100%';
+        canvas.style.maxHeight = '100%';
+        box.appendChild(canvas);
+
+        // Renderizar gráfico usando Chart.js se disponível
+        if (typeof Chart !== 'undefined') {
+          try {
+            const ctx = canvas.getContext('2d');
+            const chartData = p.chartData || { labels: [], datasets: [] };
+            const chartOptions = {
+              ...(p.chartOptions || {}),
+              responsive: false,
+              animation: { duration: 0 },
+              maintainAspectRatio: false
+            };
+
+            const chart = new Chart(ctx, {
+              type: p.chartType || 'bar',
+              data: chartData,
+              options: chartOptions
+            });
+
+            // Armazenar referência do chart para destruir depois
+            box._chart = chart;
+          } catch (e) {
+            box.innerHTML = '<div style="font-size: 0.75rem; color: #ef4444;">Erro ao renderizar gráfico</div>';
+          }
+        } else {
+          box.innerHTML = '<div style="font-size: 0.75rem; color: #6b7280;">Chart.js não carregado</div>';
+        }
+
+        preview.appendChild(box);
+      }
+      else {
+        preview.textContent = elementLabel(el);
+      }
+
+      wrapper.appendChild(preview);
+      return wrapper;
+    }
+
+    function renderCanvas(shouldAdjustSize = true) {
+      const root = getRootGroup();
+
+      // Limpar canvas
+      elementsList.innerHTML = '';
+
+      // Renderizar Header se ativado
+      if (documentHeader.enabled && documentHeader.root) {
+        const headerContainer = document.createElement('div');
+        headerContainer.className = 'header-container';
+        headerContainer.setAttribute('data-header-container', 'true');
+        // Removido position: sticky para que role junto com o conteúdo
+        // Mantém apenas o estilo visual, sem fixação durante scroll
+        headerContainer.style.background = '#f9fafb';
+        headerContainer.style.borderBottom = '2px solid #2563eb';
+        headerContainer.style.padding = '1rem';
+        headerContainer.style.marginBottom = '1rem';
+        headerContainer.style.minHeight = `${documentHeader.height}px`;
+
+        const headerLabel = document.createElement('div');
+        headerLabel.style.fontSize = '0.75rem';
+        headerLabel.style.fontWeight = '600';
+        headerLabel.style.color = '#2563eb';
+        headerLabel.style.marginBottom = '0.5rem';
+        headerLabel.textContent = '📄 CABEÇALHO';
+        headerContainer.appendChild(headerLabel);
+
+        const headerContent = document.createElement('div');
+        headerContent.className = 'header-content';
+        headerContent.setAttribute('data-drop-kind', 'groupChildren');
+        headerContent.setAttribute('data-target-id', documentHeader.root.id);
+        headerContent.addEventListener('dragover', onDropZoneOver);
+        headerContent.addEventListener('dragleave', onDropZoneLeave);
+        headerContent.addEventListener('drop', onDropZoneDrop);
+
+        const headerChildren = documentHeader.root.properties.children || [];
+        if (headerChildren.length === 0) {
+          const ph = document.createElement('div');
+          ph.className = 'group-placeholder';
+          ph.textContent = 'Arraste elementos aqui para o cabeçalho';
+          headerContent.appendChild(ph);
+        } else {
+          headerChildren.forEach(ch => {
+            headerContent.appendChild(renderElementRecursive(ch));
+          });
+        }
+
+        headerContainer.appendChild(headerContent);
+        elementsList.appendChild(headerContainer);
+      }
+
+      // Renderizar conteúdo principal
+      if (!root) {
+        canvasEmpty.style.display = 'flex';
+        elementsList.style.display = 'none';
+        // Resetar altura do canvas quando vazio
+        canvas.style.height = 'auto';
+        canvas.style.minHeight = '842px';
+        return;
+      }
+      canvasEmpty.style.display = 'none';
+      elementsList.style.display = 'flex';
+
+      elementsList.appendChild(renderElementRecursive(root));
+
+      // Renderizar Footer se ativado
+      if (documentFooter.enabled && documentFooter.root) {
+        const footerContainer = document.createElement('div');
+        footerContainer.className = 'footer-container';
+        footerContainer.setAttribute('data-footer-container', 'true');
+        // Removido position: sticky para que role junto com o conteúdo
+        // Mantém apenas o estilo visual, sem fixação durante scroll
+        footerContainer.style.background = '#f9fafb';
+        footerContainer.style.borderTop = '2px solid #2563eb';
+        footerContainer.style.padding = '1rem';
+        footerContainer.style.marginTop = '1rem';
+        footerContainer.style.minHeight = `${documentFooter.height}px`;
+
+        const footerLabel = document.createElement('div');
+        footerLabel.style.fontSize = '0.75rem';
+        footerLabel.style.fontWeight = '600';
+        footerLabel.style.color = '#2563eb';
+        footerLabel.style.marginBottom = '0.5rem';
+        footerLabel.textContent = '📄 RODAPÉ';
+        footerContainer.appendChild(footerLabel);
+
+        const footerContent = document.createElement('div');
+        footerContent.className = 'footer-content';
+        footerContent.setAttribute('data-drop-kind', 'groupChildren');
+        footerContent.setAttribute('data-target-id', documentFooter.root.id);
+        footerContent.addEventListener('dragover', onDropZoneOver);
+        footerContent.addEventListener('dragleave', onDropZoneLeave);
+        footerContent.addEventListener('drop', onDropZoneDrop);
+
+        const footerChildren = documentFooter.root.properties.children || [];
+        if (footerChildren.length === 0) {
+          const ph = document.createElement('div');
+          ph.className = 'group-placeholder';
+          ph.textContent = 'Arraste elementos aqui para o rodapé';
+          footerContent.appendChild(ph);
+        } else {
+          footerChildren.forEach(ch => {
+            footerContent.appendChild(renderElementRecursive(ch));
+          });
+        }
+
+        footerContainer.appendChild(footerContent);
+        elementsList.appendChild(footerContainer);
+      }
+
+      applyZoom();
+
+      // Ajustar altura e largura do canvas dinamicamente baseado no conteúdo
+      // IMPORTANTE: Só ajustar se solicitado E se permitido (apenas quando elementos são adicionados/removidos)
+      if (shouldAdjustSize && allowCanvasSizeAdjust) {
+        // Usar setTimeout para garantir que o DOM está completamente renderizado
+        // Isso evita medições incorretas que causam crescimento infinito
+        setTimeout(() => {
+          if (allowCanvasSizeAdjust) {
+            adjustCanvasSize();
+            // Desativar imediatamente após ajustar para evitar ajustes em cliques subsequentes
+            allowCanvasSizeAdjust = false;
+          }
+        }, 50);
+      }
+    }
+
+    /**
+     * Função central para auto-redimensionar a página/canvas baseado no conteúdo real
+     * Ajusta tanto ALTURA quanto LARGURA dinamicamente, sem impor limites artificiais
+     * 
+     * Comportamento:
+     * - Mede o conteúdo REAL usando scrollWidth/scrollHeight
+     * - Aplica o tamanho calculado no canvas
+     * - Não altera layout visual, apenas tamanho do container
+     * - Não afeta o output do PDF (apenas visual do editor)
+     */
+    let isAdjustingCanvasSize = false; // Flag para evitar chamadas recursivas
+    let lastCanvasWidth = 0; // Armazenar última largura aplicada para evitar recálculos desnecessários
+    let lastCanvasHeight = 0; // Armazenar última altura aplicada para evitar recálculos desnecessários
+
+    // Função auxiliar para resetar cache de tamanho do canvas quando conteúdo muda
+    // IMPORTANTE: Só resetar quando há mudanças estruturais reais (adicionar/remover elementos)
+    // NÃO resetar durante edições de propriedades (texto, cores, etc.)
+    function resetCanvasSizeCache() {
+      lastCanvasWidth = 0;
+      lastCanvasHeight = 0;
+    }
+
+    // Flag para indicar se estamos em modo de edição (não ajustar tamanho)
+    let isEditingMode = false;
+
+    // Flag para permitir ajuste de tamanho apenas quando elementos são adicionados/removidos
+    let allowCanvasSizeAdjust = false;
+
+    function adjustCanvasSize() {
+      // Evitar chamadas recursivas que podem causar crescimento infinito
+      if (isAdjustingCanvasSize) return;
+
+      // IMPORTANTE: Não ajustar tamanho durante edições de propriedades
+      // Isso evita crescimento infinito ao editar texto, cores, posições, etc.
+      if (isEditingMode) {
+        return;
+      }
+
+      // IMPORTANTE: Só ajustar tamanho quando explicitamente permitido (adicionar/remover elementos)
+      // Isso evita crescimento infinito ao clicar em elementos ou no canvas
+      if (!allowCanvasSizeAdjust) {
+        return;
+      }
+
+      isAdjustingCanvasSize = true;
+
+      // IMPORTANTE: Desativar allowCanvasSizeAdjust imediatamente para evitar múltiplas chamadas
+      allowCanvasSizeAdjust = false;
+
+      // Aguardar múltiplos frames para garantir que o DOM foi completamente atualizado
+      // Isso é importante para elementos aninhados e transições CSS
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (!elementsList || !canvas) {
+            isAdjustingCanvasSize = false;
+            return;
+          }
+
+          // ==========================================
+          // AJUSTAR ALTURA (já funcionando, manter lógica)
+          // ==========================================
+          if (elementsList.children.length === 0) {
+            // Se não há elementos, manter altura mínima
+            canvas.style.height = 'auto';
+            canvas.style.minHeight = '842px';
+          } else {
+            // Calcular altura total do conteúdo
+            // Padding do canvas: 2rem top + 2rem bottom = 64px total
+            const canvasPaddingTop = 32; // 2rem
+            const canvasPaddingBottom = 32; // 2rem
+
+            // Obter altura total da lista de elementos
+            // Usar scrollHeight para pegar a altura real incluindo elementos que podem estar fora da viewport
+            const elementsListHeight = elementsList.scrollHeight;
+
+            // Calcular altura total: altura dos elementos + padding do canvas
+            const totalHeight = elementsListHeight + canvasPaddingTop + canvasPaddingBottom;
+
+            // Altura mínima é 842px (tamanho A4 portrait em pixels a 96dpi)
+            const minHeight = 842;
+
+            // Definir altura do canvas (mínimo ou altura calculada, o que for maior)
+            // Adicionar uma pequena margem de segurança (20px) para evitar cortes
+            const newHeight = Math.max(minHeight, totalHeight + 20);
+
+            // Só aplicar se a diferença for significativa (mais de 15px)
+            const currentHeight = lastCanvasHeight > 0 ? lastCanvasHeight : (parseInt(canvas.style.height) || canvas.offsetHeight || minHeight);
+            const heightDifference = Math.abs(newHeight - currentHeight);
+
+            if (heightDifference > 15) {
+              canvas.style.height = newHeight + 'px';
+              canvas.style.minHeight = minHeight + 'px';
+              lastCanvasHeight = newHeight;
+            } else {
+              if (lastCanvasHeight === 0) {
+                lastCanvasHeight = currentHeight;
+              }
+            }
+          }
+
+          // ==========================================
+          // AJUSTAR LARGURA (nova implementação)
+          // ==========================================
+          // IMPORTANTE: Fazer TODAS as medições ANTES de alterar qualquer estilo
+          // Isso evita reflows que causam crescimento incremental
+
+          const canvasPaddingLeft = 32; // 2rem
+          const canvasPaddingRight = 32; // 2rem
+          const minWidth = 595; // Largura mínima A4 portrait
+
+          // 1. Obter largura atual do canvas ANTES de qualquer medição
+          // Isso garante que não estamos comparando com valores já alterados
+          // Usar a última largura aplicada se disponível, senão usar o valor atual
+          const currentCanvasWidth = lastCanvasWidth > 0 ? lastCanvasWidth : (parseInt(canvas.style.width) || canvas.offsetWidth || minWidth);
+
+          // 2. Medir o scrollWidth do elementsList SEM alterar o DOM
+          // IMPORTANTE: Não alterar temporariamente o width do elementsList para evitar reflows que causam loops
+          let contentWidth = elementsList.scrollWidth || elementsList.offsetWidth || 0;
+
+          // 3. Verificar elementos raiz diretamente para garantir que capturamos tudo
+          // Elementos raiz são os .element-item que estão diretamente dentro de .elements-list
+          const rootElements = Array.from(elementsList.children).filter(
+            child => child.classList.contains('element-item') ||
+              child.classList.contains('header-container') ||
+              child.classList.contains('footer-container')
+          );
+
+          rootElements.forEach(rootEl => {
+            // Para cada elemento raiz, medir sua largura real
+            const rootScrollWidth = rootEl.scrollWidth || 0;
+            const rootOffsetWidth = rootEl.offsetWidth || 0;
+            const rootWidth = Math.max(rootScrollWidth, rootOffsetWidth);
+
+            if (rootWidth > contentWidth) {
+              contentWidth = rootWidth;
+            }
+
+            // Verificar também elementos dentro deste root (tabelas, grupos, etc.)
+            // Buscar todas as tabelas dentro deste elemento
+            const tablesInRoot = rootEl.querySelectorAll('table, .preview-table');
+            tablesInRoot.forEach(table => {
+              // Para tabelas, calcular largura real somando células
+              // Estratégia: somar a largura de todas as células da primeira linha
+              let tableWidth = 0;
+              const firstRow = table.querySelector('tr');
+
+              if (firstRow) {
+                const cells = firstRow.querySelectorAll('td, th');
+                cells.forEach(cell => {
+                  // scrollWidth captura a largura real do conteúdo, mesmo que esteja cortado
+                  const cellScrollWidth = cell.scrollWidth || 0;
+                  const cellOffsetWidth = cell.offsetWidth || 0;
+                  const cellRect = cell.getBoundingClientRect();
+                  // Usar o maior valor para garantir que capturamos a largura real
+                  const cellWidth = Math.max(cellScrollWidth, cellOffsetWidth, cellRect.width);
+                  tableWidth += cellWidth;
+                });
+              }
+
+              // Se não conseguiu calcular pelas células, usar scrollWidth da tabela
+              if (tableWidth === 0) {
+                tableWidth = table.scrollWidth || table.offsetWidth || table.getBoundingClientRect().width;
+              }
+
+              // Considerar padding e bordas da tabela (getBoundingClientRect inclui isso)
+              const tableRect = table.getBoundingClientRect();
+              if (tableRect.width > tableWidth) {
+                tableWidth = tableRect.width;
+              }
+
+              if (tableWidth > contentWidth) {
+                contentWidth = tableWidth;
+              }
+            });
+          });
+
+          // 4. Calcular largura total necessária: largura do conteúdo + padding do canvas
+          const totalWidth = contentWidth + canvasPaddingLeft + canvasPaddingRight;
+
+          // 5. Definir largura do canvas (mínimo ou largura calculada, o que for maior)
+          // Adicionar margem de segurança (30px) para evitar cortes de bordas/padding
+          const newWidth = Math.max(minWidth, totalWidth + 30);
+
+          // 6. Comparar com a largura atual ANTES de aplicar qualquer alteração
+          // Só aplicar se a diferença for significativa (mais de 15px para evitar ajustes infinitos)
+          // Isso evita ajustes infinitos por diferenças mínimas de arredondamento ou medições inconsistentes
+          const widthDifference = Math.abs(newWidth - currentCanvasWidth);
+
+          // IMPORTANTE: Limitar o crescimento máximo para evitar crescimento infinito
+          // Se a nova largura for muito maior que a atual (mais de 200px), pode ser um erro de medição
+          const maxWidthIncrease = 200; // Máximo de aumento permitido por vez
+          const shouldApplyWidth = widthDifference > 15 && (newWidth <= currentCanvasWidth + maxWidthIncrease);
+
+          if (shouldApplyWidth) {
+            // 7. Aplicar largura no canvas APENAS se realmente necessário
+            canvas.style.width = newWidth + 'px';
+            canvas.style.minWidth = minWidth + 'px';
+            canvas.style.maxWidth = 'none'; // Remover qualquer limite máximo
+
+            // Armazenar a largura aplicada para evitar recálculos desnecessários
+            lastCanvasWidth = newWidth;
+
+            // 8. Garantir que containers pais não limitem o crescimento
+            // O canvas-wrapper deve permitir que o canvas cresça
+            // IMPORTANTE: Só alterar se realmente necessário para evitar reflows desnecessários
+            const canvasWrapper = canvas.parentElement;
+            if (canvasWrapper && canvasWrapper.classList.contains('canvas-wrapper')) {
+              // Verificar se já está configurado corretamente antes de alterar
+              if (canvasWrapper.style.maxWidth !== 'none') {
+                canvasWrapper.style.width = 'auto';
+                canvasWrapper.style.minWidth = '0';
+                canvasWrapper.style.maxWidth = 'none';
+              }
+            }
+
+            // 9. Garantir que elements-list também não limite o crescimento
+            // elements-list deve poder crescer horizontalmente
+            // IMPORTANTE: Só alterar se realmente necessário para evitar reflows desnecessários
+            if (elementsList && elementsList.style.maxWidth !== 'none') {
+              elementsList.style.width = 'auto';
+              elementsList.style.minWidth = '0';
+              elementsList.style.maxWidth = 'none';
+            }
+          } else {
+            // Se não houve alteração, manter a última largura conhecida
+            if (lastCanvasWidth === 0) {
+              lastCanvasWidth = currentCanvasWidth;
+            }
+            // Se a nova largura é muito maior, pode ser um erro de medição - não aplicar
+            if (newWidth > currentCanvasWidth + 200) {
+              console.warn('Ajuste de largura do canvas ignorado - possível erro de medição:', {
+                current: currentCanvasWidth,
+                calculated: newWidth,
+                difference: widthDifference
+              });
+            }
+          }
+
+          // 10. Liberar flag após completar o ajuste (importante para evitar loops infinitos)
+          isAdjustingCanvasSize = false;
+        });
+      });
+    }
+
+    function selectElement(id) {
+      // Evitar re-renderização desnecessária se o elemento já está selecionado
+      if (selectedElementId === id) {
+        return; // Já está selecionado, não precisa fazer nada
+      }
+
+      // Mostrar o painel se estiver oculto
+      const panel = document.getElementById('codePanel');
+      if (panel && panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+      }
+
+      // Atualizar seleção visual sem recriar o DOM inteiro
+      // Isso evita reflows desnecessários que causam crescimento infinito
+      const prevSelected = selectedElementId ? document.querySelector(`[data-id="${selectedElementId}"]`) : null;
+      if (prevSelected) {
+        prevSelected.classList.remove('selected');
+      }
+
+      const newSelected = document.querySelector(`[data-id="${id}"]`);
+      if (newSelected) {
+        newSelected.classList.add('selected');
+      }
+
+      selectedElementId = id;
+      // IMPORTANTE: Não recriar o DOM quando apenas selecionamos
+      // Apenas atualizar o inspector (código será gerado apenas quando solicitado)
+      renderInspector();
+      // Salvar estado após seleção
+      saveState();
+    }
+
+    function closePanel() {
+      const panel = document.getElementById('codePanel');
+      if (panel) {
+        panel.classList.add('hidden');
+      }
+    }
+
+    window.closePanel = closePanel;
+
+    // -----------------------
+    // Inspector (Right panel)
+    // -----------------------
+    function fieldWrap(labelText) {
+      const wrap = document.createElement('div');
+      wrap.className = 'inspector-field';
+      const label = document.createElement('label');
+      label.textContent = labelText;
+      wrap.appendChild(label);
+      return wrap;
+    }
+
+    function addInput(wrap, value, onChange, opts = {}) {
+      const input = document.createElement('input');
+      input.type = opts.type || 'text';
+      if (opts.min != null) input.min = opts.min;
+      if (opts.max != null) input.max = opts.max;
+      if (opts.step != null) input.step = opts.step;
+      input.value = value ?? '';
+      input.oninput = () => onChange(input.value);
+      wrap.appendChild(input);
+      return input;
+    }
+
+    function addSelect(wrap, value, options, onChange) {
+      const sel = document.createElement('select');
+      options.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label;
+        if (o.value === value) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.onchange = () => onChange(sel.value);
+      wrap.appendChild(sel);
+      return sel;
+    }
+
+    function addTextarea(wrap, value, onChange) {
+      const ta = document.createElement('textarea');
+      ta.value = value ?? '';
+      ta.oninput = () => onChange(ta.value);
+      wrap.appendChild(ta);
+      return ta;
+    }
+
+    // Funções auxiliares para o editor (do gerador_atualizado_v2.html)
+    function findElementByIdRecursive(id, elementsArray) {
+      for (const el of elementsArray) {
+        if (el.id === id) return el;
+
+        // Buscar em grupos
+        if (el.type === 'group' && el.properties && el.properties.children) {
+          const found = findElementByIdRecursive(id, el.properties.children);
+          if (found) return found;
+        }
+
+        // Buscar em columns
+        if (el.type === 'columns' && el.properties && el.properties.columns) {
+          for (const col of el.properties.columns) {
+            if (col.children) {
+              const found = findElementByIdRecursive(id, col.children);
+              if (found) return found;
+            }
+          }
+        }
+
+        // Buscar em list items (quando item é um node)
+        if (el.type === 'list' && el.properties && el.properties.items) {
+          for (const item of el.properties.items) {
+            if (item.kind === 'node' && item.node) {
+              if (item.node.id === id) return item.node;
+              // Buscar recursivamente no node
+              const found = findElementByIdRecursive(id, [item.node]);
+              if (found) return found;
+            }
+          }
+        }
+
+        // Buscar em table cells
+        if (el.type === 'table' && el.properties && el.properties.body) {
+          for (const row of el.properties.body) {
+            for (const cell of row) {
+              if (cell && typeof cell === 'object' && cell.children) {
+                const found = findElementByIdRecursive(id, cell.children);
+                if (found) return found;
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    function findElementById(id) {
+      if (!id) return null;
+      // Primeiro tentar usar findNodeById se existir
+      if (typeof findNodeById === 'function') {
+        const node = findNodeById(id);
+        if (node) return node;
+      }
+      // Depois buscar recursivamente nos elements
+      return findElementByIdRecursive(id, elements);
+    }
+
+    // Find parent container of an element (group, columns, list, table)
+    // Verificar se elemento está dentro de header
+    function isElementInHeader(elementId) {
+      if (!elementId || !documentHeader.root) return false;
+      let found = false;
+      walk(documentHeader.root, (n) => {
+        if (n.id === elementId) found = true;
+      });
+      return found;
+    }
+
+    // Verificar se elemento está dentro de footer
+    function isElementInFooter(elementId) {
+      if (!elementId || !documentFooter.root) return false;
+      let found = false;
+      walk(documentFooter.root, (n) => {
+        if (n.id === elementId) found = true;
+      });
+      return found;
+    }
+
+    function findParentGroup(elementId) {
+      if (!elementId) return null;
+
+      // Buscar em grupos do root
+      for (const group of elements) {
+        if (group.type === 'group' && group.properties && group.properties.children) {
+          const childIndex = group.properties.children.findIndex(c => c && c.id === elementId);
+          if (childIndex !== -1) {
+            return { group, child: group.properties.children[childIndex], index: childIndex };
+          }
+
+          // Buscar recursivamente em grupos aninhados
+          for (const childGroup of group.properties.children) {
+            if (childGroup && childGroup.type === 'group' && childGroup.properties && childGroup.properties.children) {
+              const nestedChildIndex = childGroup.properties.children.findIndex(c => c && c.id === elementId);
+              if (nestedChildIndex !== -1) {
+                return {
+                  group: childGroup,
+                  child: childGroup.properties.children[nestedChildIndex],
+                  index: nestedChildIndex
+                };
+              }
+            }
+          }
+        }
+
+        // Buscar em columns
+        if (group.type === 'columns' && group.properties && group.properties.columns) {
+          for (let colIdx = 0; colIdx < group.properties.columns.length; colIdx++) {
+            const col = group.properties.columns[colIdx];
+            if (col.children) {
+              const childIndex = col.children.findIndex(c => c && c.id === elementId);
+              if (childIndex !== -1) {
+                return { group, child: col.children[childIndex], index: childIndex, colIndex: colIdx };
+              }
+            }
+          }
+        }
+
+        // Buscar em list items
+        if (group.type === 'list' && group.properties && group.properties.items) {
+          for (let itemIdx = 0; itemIdx < group.properties.items.length; itemIdx++) {
+            const item = group.properties.items[itemIdx];
+            if (item.kind === 'node' && item.node && item.node.id === elementId) {
+              return { group, child: item.node, index: itemIdx };
+            }
+          }
+        }
+
+        // Buscar em table cells
+        if (group.type === 'table' && group.properties && group.properties.body) {
+          for (let rowIdx = 0; rowIdx < group.properties.body.length; rowIdx++) {
+            const row = group.properties.body[rowIdx];
+            for (let colIdx = 0; colIdx < row.length; colIdx++) {
+              const cell = row[colIdx];
+              if (cell && typeof cell === 'object' && cell.children) {
+                const childIndex = cell.children.findIndex(c => c && c.id === elementId);
+                if (childIndex !== -1) {
+                  return { group, child: cell.children[childIndex], index: childIndex, rowIndex: rowIdx, colIndex: colIdx };
+                }
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    // Mover elemento dentro de um container (grupo, columns, table)
+    function moveElementInContainer(direction) {
+      if (!selectedElementId) return;
+
+      const nodeWithParent = findNodeWithParent(selectedElementId);
+      if (!nodeWithParent || !nodeWithParent.parent || !nodeWithParent.ctx) return;
+
+      const { parent, ctx } = nodeWithParent;
+      let children = [];
+      let index = -1;
+
+      // Determinar array de children e índice baseado no tipo de container
+      if (ctx.kind === 'groupChildren') {
+        children = parent.properties.children || [];
+        index = ctx.index;
+      } else if (ctx.kind === 'columns') {
+        const col = parent.properties.columns[ctx.colIndex];
+        children = col.children || [];
+        index = ctx.index;
+      } else if (ctx.kind === 'tableCell') {
+        const cell = parent.properties.body[ctx.row][ctx.col];
+        children = cell.children || [];
+        index = ctx.index;
+      } else {
+        return; // Não suportado
+      }
+
+      if (children.length <= 1) return;
+
+      let newIndex = index;
+
+      switch (direction) {
+        case 'first':
+          if (index === 0) return;
+          newIndex = 0;
+          break;
+        case 'prev':
+          if (index === 0) return;
+          newIndex = index - 1;
+          break;
+        case 'next':
+          if (index === children.length - 1) return;
+          newIndex = index + 1;
+          break;
+        case 'last':
+          if (index === children.length - 1) return;
+          newIndex = children.length - 1;
+          break;
+      }
+
+      // Mover elemento
+      const [movedElement] = children.splice(index, 1);
+      children.splice(newIndex, 0, movedElement);
+
+      // Se for grupo, recalcular larguras se for horizontal
+      if (ctx.kind === 'groupChildren' && parent.properties.orientation === 'row' && typeof updateGroupChildrenWidths === 'function') {
+        updateGroupChildrenWidths(parent);
+      }
+
+      // Atualizar dimensões do grupo se aplicável
+      if (ctx.kind === 'groupChildren' && typeof updateGroupDimensions === 'function') {
+        updateGroupDimensions(parent);
+      }
+
+      // Re-renderizar imediatamente
+      if (typeof renderAll === 'function') {
+        renderAll();
+      } else if (typeof render === 'function') {
+        render();
+      }
+      // Atualizar inspector para refletir a nova posição
+      setTimeout(() => {
+        if (typeof renderInspector === 'function') renderInspector();
+      }, 0);
+    }
+
+    // Mover elemento dentro de um grupo (mantido para compatibilidade)
+    function moveElementInGroup(direction) {
+      moveElementInContainer(direction);
+    }
+
+    // Mover coluna dentro de columns
+    function moveColumnInColumns(elementId, colIndex, direction) {
+      const element = findElementById(elementId);
+      if (!element || element.type !== 'columns') return;
+
+      const cols = element.properties.columns || [];
+      if (cols.length <= 1) return;
+
+      let newIndex = colIndex;
+
+      switch (direction) {
+        case 'first':
+          if (colIndex === 0) return;
+          newIndex = 0;
+          break;
+        case 'prev':
+          if (colIndex === 0) return;
+          newIndex = colIndex - 1;
+          break;
+        case 'next':
+          if (colIndex === cols.length - 1) return;
+          newIndex = colIndex + 1;
+          break;
+        case 'last':
+          if (colIndex === cols.length - 1) return;
+          newIndex = cols.length - 1;
+          break;
+      }
+
+      // Mover coluna
+      const [movedCol] = cols.splice(colIndex, 1);
+      cols.splice(newIndex, 0, movedCol);
+
+      // Re-renderizar
+      if (typeof renderAll === 'function') {
+        renderAll();
+      } else if (typeof render === 'function') {
+        render();
+      }
+      // Atualizar inspector
+      setTimeout(() => {
+        if (typeof renderInspector === 'function') renderInspector();
+      }, 0);
+    }
+
+    // Mover coluna dentro de table
+    function moveColumnInTable(elementId, colIndex, direction) {
+      const element = findElementById(elementId);
+      if (!element || element.type !== 'table') return;
+
+      const body = element.properties.body || [];
+      if (body.length === 0) return;
+
+      const numCols = body[0].length;
+      if (numCols <= 1) return;
+
+      let newIndex = colIndex;
+
+      switch (direction) {
+        case 'first':
+          if (colIndex === 0) return;
+          newIndex = 0;
+          break;
+        case 'prev':
+          if (colIndex === 0) return;
+          newIndex = colIndex - 1;
+          break;
+        case 'next':
+          if (colIndex === numCols - 1) return;
+          newIndex = colIndex + 1;
+          break;
+        case 'last':
+          if (colIndex === numCols - 1) return;
+          newIndex = numCols - 1;
+          break;
+      }
+
+      // Mover coluna em todas as linhas
+      body.forEach(row => {
+        const [movedCell] = row.splice(colIndex, 1);
+        row.splice(newIndex, 0, movedCell);
+      });
+
+      // Mover width correspondente se existir
+      if (element.properties.widths && element.properties.widths.length === numCols) {
+        const [movedWidth] = element.properties.widths.splice(colIndex, 1);
+        element.properties.widths.splice(newIndex, 0, movedWidth);
+      }
+
+      // Re-renderizar
+      if (typeof renderAll === 'function') {
+        renderAll();
+      } else if (typeof render === 'function') {
+        render();
+      }
+      // Atualizar inspector
+      setTimeout(() => {
+        if (typeof renderInspector === 'function') renderInspector();
+      }, 0);
+    }
+
+    // Deletar coluna específica de columns
+    function deleteColumnFromColumns(elementId, colIndex) {
+      const element = findElementById(elementId);
+      if (!element || element.type !== 'columns') return;
+
+      const cols = element.properties.columns || [];
+      if (cols.length <= 1) {
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Aviso', 'É necessário manter pelo menos uma coluna.');
+        }
+        return;
+      }
+
+      if (typeof showConfirmModal === 'function') {
+        showConfirmModal(
+          'Deletar Coluna',
+          `Tem certeza que deseja deletar a Coluna ${colIndex + 1}? Todos os elementos dentro desta coluna serão removidos.`,
+          () => {
+            // Deletar a coluna
+            cols.splice(colIndex, 1);
+
+            // Atualizar o número de colunas no input se existir
+            const colCountInput = document.getElementById('insp-colCount');
+            if (colCountInput) {
+              colCountInput.value = cols.length;
+            }
+
+            // Re-renderizar
+            if (typeof renderAll === 'function') {
+              renderAll();
+            } else if (typeof render === 'function') {
+              render();
+            }
+            // Atualizar inspector
+            setTimeout(() => {
+              if (typeof renderInspector === 'function') renderInspector();
+            }, 0);
+          }
+        );
+      }
+    }
+
+    // Deletar coluna específica de table
+    function deleteColumnFromTable(elementId, colIndex) {
+      const element = findElementById(elementId);
+      if (!element || element.type !== 'table') return;
+
+      const body = element.properties.body || [];
+      if (body.length === 0) return;
+
+      const numCols = body[0].length;
+      if (numCols <= 1) {
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Aviso', 'É necessário manter pelo menos uma coluna.');
+        }
+        return;
+      }
+
+      if (typeof showConfirmModal === 'function') {
+        showConfirmModal(
+          'Deletar Coluna',
+          `Tem certeza que deseja deletar a Coluna ${colIndex + 1}? Todos os dados desta coluna em todas as linhas serão removidos.`,
+          () => {
+            // Deletar coluna de todas as linhas
+            body.forEach(row => {
+              row.splice(colIndex, 1);
+            });
+
+            // Deletar width correspondente se existir
+            if (element.properties.widths && element.properties.widths.length === numCols) {
+              element.properties.widths.splice(colIndex, 1);
+            }
+
+            // Atualizar número de colunas no input se existir
+            const tableColsInput = document.getElementById('insp-tableCols');
+            if (tableColsInput) {
+              tableColsInput.value = numCols - 1;
+            }
+
+            // Re-renderizar
+            if (typeof renderAll === 'function') {
+              renderAll();
+            } else if (typeof render === 'function') {
+              render();
+            }
+            // Atualizar inspector
+            setTimeout(() => {
+              if (typeof renderInspector === 'function') renderInspector();
+            }, 0);
+          }
+        );
+      }
+    }
+
+    // Processar imagem com border-radius usando Canvas (adaptado do script Node.js fornecido)
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function updateParentGroupsDimensions(childId) {
+      if (!childId) return;
+      elements.forEach(group => {
+        if (group.type === 'group' && group.properties && group.properties.children) {
+          const hasChild = group.properties.children.some(child => child && child.id === childId);
+          if (hasChild && typeof updateGroupDimensions === 'function') {
+            updateGroupDimensions(group);
+          }
+        }
+      });
+    }
+
+    // Remover elemento selecionado
+    function removeSelectedElement() {
+      if (!selectedElementId) return;
+
+      showConfirmModal(
+        'Remover elemento',
+        'Tem certeza que deseja remover este elemento?',
+        () => {
+          // Usar deleteSelected que já existe e funciona corretamente
+          deleteSelected();
+          // Atualizar inspector após remoção
+          renderInspector();
+        }
+      );
+    }
+    window.removeSelectedElement = removeSelectedElement; // Tornar global para uso no onclick
+
+    // Variável global para armazenar propriedades copiadas
+    let copiedElementProperties = null;
+
+    // Duplicar elemento selecionado
+    function duplicateSelectedElement() {
+      if (!selectedElementId) return;
+
+      const element = findElementById(selectedElementId);
+      if (!element) return;
+
+      // Criar uma cópia profunda do elemento
+      const duplicated = JSON.parse(JSON.stringify(element));
+
+      // Gerar novo ID
+      duplicated.id = 'el_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+      // Encontrar onde adicionar o elemento duplicado
+      const parentGroupInfo = findParentGroup(selectedElementId);
+      const nodeWithParent = findNodeWithParent(selectedElementId);
+
+      if (parentGroupInfo) {
+        // Adicionar ao mesmo grupo, após o elemento original
+        const parentGroup = parentGroupInfo.group;
+        const children = parentGroup.properties.children || [];
+        const index = parentGroupInfo.index;
+        children.splice(index + 1, 0, duplicated);
+        parentGroup.properties.children = children;
+      } else if (nodeWithParent && nodeWithParent.parent && nodeWithParent.ctx) {
+        const ctx = nodeWithParent.ctx;
+        if (ctx.kind === 'columns') {
+          const col = nodeWithParent.parent.properties.columns[ctx.colIndex];
+          const children = col.children || [];
+          children.splice(ctx.index + 1, 0, duplicated);
+          col.children = children;
+        } else if (ctx.kind === 'tableCell') {
+          const cell = nodeWithParent.parent.properties.body[ctx.row][ctx.col];
+          const children = cell.children || [];
+          children.splice(ctx.index + 1, 0, duplicated);
+          cell.children = children;
+        } else {
+          // Adicionar ao root
+          const rootGroup = getRootGroup();
+          if (rootGroup) {
+            const children = rootGroup.properties.children || [];
+            const index = children.findIndex(el => el.id === selectedElementId);
+            if (index >= 0) {
+              children.splice(index + 1, 0, duplicated);
+            } else {
+              children.push(duplicated);
+            }
+            rootGroup.properties.children = children;
+          }
+        }
+      } else {
+        // Adicionar ao root
+        const rootGroup = getRootGroup();
+        if (rootGroup) {
+          const children = rootGroup.properties.children || [];
+          const index = children.findIndex(el => el.id === selectedElementId);
+          if (index >= 0) {
+            children.splice(index + 1, 0, duplicated);
+          } else {
+            children.push(duplicated);
+          }
+          rootGroup.properties.children = children;
+        }
+      }
+
+      // Selecionar o elemento duplicado
+      selectedElementId = duplicated.id;
+
+      // Resetar cache e renderizar primeiro sem ajustar tamanho
+      resetCanvasSizeCache();
+      if (typeof renderAll === 'function') {
+        renderAll(false);
+      } else if (typeof render === 'function') {
+        render();
+      }
+
+      // Depois, permitir ajuste e fazer ajuste único após um delay
+      setTimeout(() => {
+        allowCanvasSizeAdjust = true;
+        if (typeof renderAll === 'function') {
+          renderAll(true);
+        }
+        allowCanvasSizeAdjust = false;
+      }, 100);
+
+      // Atualizar inspector
+      setTimeout(() => {
+        if (typeof renderInspector === 'function') renderInspector();
+      }, 150);
+    }
+    window.duplicateSelectedElement = duplicateSelectedElement;
+
+    // Copiar propriedades do elemento
+    function copyElementProperties() {
+      if (!selectedElementId) return;
+
+      const element = findElementById(selectedElementId);
+      if (!element) return;
+
+      // Copiar apenas as propriedades (não o ID nem outras propriedades do elemento)
+      copiedElementProperties = {
+        type: element.type,
+        properties: JSON.parse(JSON.stringify(element.properties || {}))
+      };
+
+      // Mostrar feedback
+      const btn = document.querySelector('.btn-paste');
+      if (btn) {
+        btn.style.background = '#f59e0b';
+        btn.disabled = false;
+        btn.style.cursor = 'pointer';
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Propriedades Copiadas!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      }
+    }
+    window.copyElementProperties = copyElementProperties;
+
+    // Colar propriedades no elemento selecionado
+    function pasteElementProperties() {
+      if (!selectedElementId || !copiedElementProperties) return;
+
+      const element = findElementById(selectedElementId);
+      if (!element) return;
+
+      // Só colar se os tipos forem compatíveis
+      if (element.type !== copiedElementProperties.type) {
+        if (typeof showAlertModal === 'function') {
+          showAlertModal(
+            'Erro ao Colar Propriedades',
+            `Não é possível colar propriedades de um tipo de elemento diferente.\n\nElemento atual: ${getElementTypeName(element.type)}\nElemento copiado: ${getElementTypeName(copiedElementProperties.type)}`
+          );
+        } else {
+          alert('Não é possível colar propriedades de um tipo de elemento diferente.');
+        }
+        return;
+      }
+
+      // Colar as propriedades (preservar ID e outras propriedades do elemento)
+      element.properties = JSON.parse(JSON.stringify(copiedElementProperties.properties));
+
+      // Atualizar renderização
+      if (typeof renderAll === 'function') {
+        renderAll();
+      } else if (typeof render === 'function') {
+        render();
+      }
+
+      // Atualizar inspector
+      setTimeout(() => {
+        if (typeof renderInspector === 'function') renderInspector();
+      }, 100);
+    }
+    window.pasteElementProperties = pasteElementProperties;
+
+    // Helper function para criar tooltips
+    function createTooltip(text, helpText = '') {
+      if (!text) return '';
+      const tooltipId = 'tooltip_' + Math.random().toString(36).substr(2, 9);
+      const fullText = helpText ? text + '\\n\\n' + helpText : text;
+      return `
+        <span style="position: relative; display: inline-block; margin-left: 0.25rem; cursor: help;" title="${escapeHtml(fullText)}">
+          <span style="color: var(--text-tertiary); font-size: 0.875rem;">ℹ️</span>
+        </span>
+      `;
+    }
+
+    // Get element type name for display
+    function getElementTypeName(type) {
+      const names = {
+        text: 'Texto',
+        header: 'Cabeçalho',
+        image: 'Imagem',
+        table: 'Tabela',
+        columns: 'Colunas',
+        list: 'Lista',
+        margin: 'Espaço',
+        pageBreak: 'Quebra de Página',
+        group: 'Grupo'
+      };
+      return names[type] || type;
+    }
+
+    function renderInspector() {
+      const inspector = document.getElementById('inspector');
+      const element = findElementById(selectedElementId);
+
+      if (!element) {
+        // Limpar título quando não há elemento selecionado
+        const typeTitle = document.getElementById('elementTypeTitle');
+        if (typeTitle) {
+          typeTitle.innerHTML = 'Tipo';
+        }
+        inspector.innerHTML = `
+          <div class="muted" style="padding: 1rem; text-align: center;">
+            Selecione um elemento no canvas para editar suas propriedades.
+          </div>
+        `;
+        return;
+      }
+
+      // Atualizar título no header
+      const typeTitle = document.getElementById('elementTypeTitle');
+      if (typeTitle) {
+        typeTitle.innerHTML = `Tipo: <strong>${getElementTypeName(element.type)}</strong>`;
+      }
+
+      let html = '';
+
+      // Check if element is inside a container (group, columns, table)
+      const parentGroupInfo = findParentGroup(element.id);
+      const nodeWithParent = findNodeWithParent(element.id);
+
+      if (parentGroupInfo || (nodeWithParent && nodeWithParent.parent && nodeWithParent.ctx)) {
+        let children = [];
+        let childIndex = -1;
+        let isFirst = false;
+        let isLast = false;
+        let showReorder = false;
+
+        // Se encontrou via findParentGroup (grupos)
+        if (parentGroupInfo) {
+          const parentGroup = parentGroupInfo.group;
+          childIndex = parentGroupInfo.index;
+          children = parentGroup.properties.children || [];
+          isFirst = childIndex === 0;
+          isLast = childIndex === children.length - 1;
+          showReorder = true;
+        }
+        // Se encontrou via findNodeWithParent (columns, table)
+        else if (nodeWithParent && nodeWithParent.parent && nodeWithParent.ctx) {
+          const ctx = nodeWithParent.ctx;
+          if (ctx.kind === 'columns') {
+            const col = nodeWithParent.parent.properties.columns[ctx.colIndex];
+            children = col.children || [];
+            childIndex = ctx.index;
+            isFirst = childIndex === 0;
+            isLast = childIndex === children.length - 1;
+            showReorder = true;
+          } else if (ctx.kind === 'tableCell') {
+            const cell = nodeWithParent.parent.properties.body[ctx.row][ctx.col];
+            children = cell.children || [];
+            childIndex = ctx.index;
+            isFirst = childIndex === 0;
+            isLast = childIndex === children.length - 1;
+            showReorder = true;
+
+            // Adicionar campo para editar verticalAlignment da célula
+            html += `
+              <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Alinhamento Vertical da Célula</label>
+                <select id="insp-cellVerticalAlignment" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
+                  <option value="top" ${cell.verticalAlignment === 'top' ? 'selected' : ''}>Topo</option>
+                  <option value="middle" ${cell.verticalAlignment === 'middle' || !cell.verticalAlignment ? 'selected' : ''}>Meio</option>
+                  <option value="bottom" ${cell.verticalAlignment === 'bottom' ? 'selected' : ''}>Inferior</option>
+                </select>
+                <div class="smallNote" style="margin-top: 0.5rem;">Alinhamento vertical do conteúdo dentro desta célula</div>
+              </div>
+            `;
+          }
+        }
+
+        // Adicionar botões de reordenação para elementos dentro de containers
+        if (showReorder && children.length > 1) {
+          html += `
+            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+              <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Reordenar Elemento</label>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <button id="btn-move-first" onclick="moveElementInContainer('first')" 
+                        style="padding: 0.5rem; background: ${isFirst ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirst ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
+                        ${isFirst ? 'disabled' : ''}>
+                  ⏮️ Primeiro
+                </button>
+                <button id="btn-move-prev" onclick="moveElementInContainer('prev')" 
+                        style="padding: 0.5rem; background: ${isFirst ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirst ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isFirst ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
+                        ${isFirst ? 'disabled' : ''}>
+                  ⬅️ Anterior
+                </button>
+                <button id="btn-move-next" onclick="moveElementInContainer('next')" 
+                        style="padding: 0.5rem; background: ${isLast ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLast ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
+                        ${isLast ? 'disabled' : ''}>
+                  ➡️ Próximo
+                </button>
+                <button id="btn-move-last" onclick="moveElementInContainer('last')" 
+                        style="padding: 0.5rem; background: ${isLast ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLast ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.375rem; cursor: ${isLast ? 'not-allowed' : 'pointer'}; font-size: 0.875rem;"
+                        ${isLast ? 'disabled' : ''}>
+                  ⏭️ Último
+                </button>
+              </div>
+            </div>
+          `;
+        }
+
+        // Show width and height fields only for elements in groups
+        if (parentGroupInfo) {
+          const parentGroup = parentGroupInfo.group;
+          if (parentGroup.properties.orientation === 'row') {
+            // Show width field for elements in horizontal groups
+            const currentWidth = element.width !== null && element.width !== undefined ? element.width : (100 / (parentGroup.properties.children?.length || 1));
+            html += `
+              <div class="inspector-field">
+                <label>Largura (%)</label>
+                <input type="number" id="insp-width" value="${Math.round(currentWidth)}" step="1">
+                <div class="smallNote">Largura do elemento dentro do grupo. O espaço restante será distribuído entre os outros elementos.</div>
+              </div>
+            `;
+          }
+        }
+      }
+
+      // Se o elemento é columns, adicionar opções para reordenar e deletar colunas
+      if (element.type === 'columns') {
+        const cols = element.properties.columns || [];
+        if (cols.length > 0) {
+          html += `
+            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+              <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Reordenar Colunas</label>
+              <div class="smallNote" style="margin-bottom: 0.5rem;">Selecione uma coluna abaixo para movê-la</div>
+          `;
+          cols.forEach((col, colIndex) => {
+            const isFirstCol = colIndex === 0;
+            const isLastCol = colIndex === cols.length - 1;
+            //const canDelete = cols.length > 1; // Só pode deletar se tiver mais de 1 coluna
+            html += `
+              <div style="margin-bottom: 0.5rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+                  <span style="font-size: 0.875rem; color: var(--text-secondary);">Coluna ${colIndex + 1}</span>
+                </div>
+                ${cols.length > 1 ? `
+                  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.25rem;">
+                    <button onclick="moveColumnInColumns('${element.id}', ${colIndex}, 'first')" 
+                            style="padding: 0.25rem; background: ${isFirstCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirstCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            ${isFirstCol ? 'disabled' : ''}>
+                      ⇤
+                    </button>
+                    <button onclick="moveColumnInColumns('${element.id}', ${colIndex}, 'prev')" 
+                            style="padding: 0.25rem; background: ${isFirstCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirstCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            ${isFirstCol ? 'disabled' : ''}>
+                      ←
+                    </button>
+                    <button onclick="moveColumnInColumns('${element.id}', ${colIndex}, 'next')" 
+                            style="padding: 0.25rem; background: ${isLastCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLastCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            ${isLastCol ? 'disabled' : ''}>
+                      →
+                    </button>
+                    <button onclick="moveColumnInColumns('${element.id}', ${colIndex}, 'last')" 
+                            style="padding: 0.25rem; background: ${isLastCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLastCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            ${isLastCol ? 'disabled' : ''}>
+                      ⇥
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          });
+          html += `</div>`;
+        }
+      }
+
+      // Se o elemento é table, adicionar opções para reordenar e deletar colunas da tabela
+      if (element.type === 'table') {
+        const body = element.properties.body || [];
+        if (body.length > 0 && body[0].length > 0) {
+          const numCols = body[0].length;
+          html += `
+            <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+              <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Reordenar Colunas da Tabela</label>
+              <div class="smallNote" style="margin-bottom: 0.5rem;">Selecione uma coluna abaixo para movê-la</div>
+          `;
+          for (let colIndex = 0; colIndex < numCols; colIndex++) {
+            const isFirstCol = colIndex === 0;
+            const isLastCol = colIndex === numCols - 1;
+            const canDelete = numCols > 1; // Só pode deletar se tiver mais de 1 coluna
+            html += `
+              <div style="margin-bottom: 0.5rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+                  <span style="font-size: 0.875rem; color: var(--text-secondary);">Coluna ${colIndex + 1}</span>
+                </div>
+                ${numCols > 1 ? `
+                  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.25rem;">
+                    <button onclick="moveColumnInTable('${element.id}', ${colIndex}, 'first')" 
+                            style="padding: 0.25rem; background: ${isFirstCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirstCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            ${isFirstCol ? 'disabled' : ''}>
+                      ⇤
+                    </button>
+                    <button onclick="moveColumnInTable('${element.id}', ${colIndex}, 'prev')" 
+                            style="padding: 0.25rem; background: ${isFirstCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isFirstCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isFirstCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            ${isFirstCol ? 'disabled' : ''}>
+                      ←
+                    </button>
+                    <button onclick="moveColumnInTable('${element.id}', ${colIndex}, 'next')" 
+                            style="padding: 0.25rem; background: ${isLastCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLastCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            ${isLastCol ? 'disabled' : ''}>
+                      →
+                    </button>
+                    <button onclick="moveColumnInTable('${element.id}', ${colIndex}, 'last')" 
+                            style="padding: 0.25rem; background: ${isLastCol ? 'var(--bg-tertiary)' : '#2563eb'}; color: ${isLastCol ? 'var(--text-tertiary)' : 'white'}; border: none; border-radius: 0.25rem; cursor: ${isLastCol ? 'not-allowed' : 'pointer'}; font-size: 0.75rem;"
+                            ${isLastCol ? 'disabled' : ''}>
+                      ⇥
+                    </button>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }
+          html += `</div>`;
+        }
+      }
+
+      // Render fields based on element type
+      switch (element.type) {
+        case 'text':
+          html += renderInspectorText(element);
+          break;
+        case 'header':
+          html += renderInspectorHeader(element);
+          break;
+        case 'image':
+          html += renderInspectorImage(element);
+          break;
+        case 'table':
+          html += renderInspectorTable(element);
+          break;
+        case 'columns':
+          html += renderInspectorColumns(element);
+          break;
+        case 'list':
+          html += renderInspectorList(element);
+          break;
+        case 'margin':
+          html += renderInspectorMargin(element);
+          break;
+        case 'pageBreak':
+          html += renderInspectorPageBreak(element);
+          break;
+        case 'qr':
+          html += renderInspectorQR(element);
+          break;
+        case 'svg':
+          html += renderInspectorSVG(element);
+          break;
+        case 'barcode':
+          html += renderInspectorBarcode(element);
+          break;
+        case 'stamp':
+          html += renderInspectorStamp(element);
+          break;
+        case 'checkbox':
+          html += renderInspectorCheckbox(element);
+          break;
+        case 'radio':
+          html += renderInspectorRadio(element);
+          break;
+        case 'fillLine':
+          html += renderInspectorFillLine(element);
+          break;
+        case 'chart':
+          html += renderInspectorChart(element);
+          break;
+        case 'group':
+          html += renderInspectorGroup(element);
+          break;
+      }
+
+      // Adicionar botões de ação no final do inspector
+      html += `
+        <div class="inspector-field" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <button class="btn-duplicate" onclick="duplicateSelectedElement()" style="padding: 0.75rem 1rem; background: #2563eb; color: white; border: none; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background 0.2s;">
+              📋 Duplicar
+            </button>
+            <button class="btn-copy" onclick="copyElementProperties()" style="padding: 0.75rem 1rem; background: #10b981; color: white; border: none; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: background 0.2s;">
+              📄 Copiar
+            </button>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr; gap: 0.5rem;">
+            <button class="btn-paste" onclick="pasteElementProperties()" style="padding: 0.75rem 1rem; background: ${copiedElementProperties ? '#f59e0b' : '#6b7280'}; color: white; border: none; border-radius: 0.5rem; font-size: 0.875rem; font-weight: 500; cursor: ${copiedElementProperties ? 'pointer' : 'not-allowed'}; transition: background 0.2s;" ${!copiedElementProperties ? 'disabled' : ''}>
+              📥 Colar Propriedades
+            </button>
+            <button class="btn-remove-large" onclick="removeSelectedElement()" style="width: 100%; padding: 0.75rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.5rem; font-size: 1rem; font-weight: 500; cursor: pointer; transition: background 0.2s;">
+              🗑️ Remover Elemento
+            </button>
+          </div>
+        </div>
+      `;
+
+      inspector.innerHTML = html;
+
+      // Forçar visibilidade do inspector após renderizar
+      if (inspector) {
+        inspector.style.display = 'block';
+        inspector.style.visibility = 'visible';
+        inspector.style.opacity = '1';
+        inspector.style.height = 'auto';
+      }
+
+      // Attach event listeners (deve ser chamado após atualizar o HTML)
+      setTimeout(() => {
+        attachInspectorListeners(element);
+      }, 0);
+    }
+
+    // Inspector render functions
+    function renderInspectorText(element) {
+      const p = element.properties || {};
+
+      // Verificar se o elemento está dentro de header ou footer
+      const isInHeader = isElementInHeader(element.id);
+      const isInFooter = isElementInFooter(element.id);
+      const isInHeaderFooter = isInHeader || isInFooter;
+
+      return `
+        <div class="inspector-field">
+          <label>ID do Elemento (para linkToDestination) ${createTooltip('Define um ID único para este elemento. Outros elementos podem usar linkToDestination apontando para este ID.', 'Exemplo: Se definir id="secao1", outros elementos podem usar linkToDestination: "secao1" para criar um link interno.')}</label>
+          <input type="text" id="insp-elementId" value="${escapeHtml(p.id || '')}" placeholder="Ex: secao1, destino1 (deixe vazio se não for destino)">
+          <div class="smallNote">ID único para este elemento. Use para criar destinos de links internos.</div>
+        </div>
+        <div class="inspector-field">
+              <label>Texto ${createTooltip('Conteúdo de texto do elemento. Pode conter múltiplas linhas.', 'Use {{pageNumber}} e {{totalPages}} em headers/footers para numeração de páginas.')}</label>
+          <textarea id="insp-text">${escapeHtml(p.text || '')}</textarea>
+          ${isInHeaderFooter ? `
+            <div class="smallNote" style="margin-top: 0.5rem; padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; border-radius: 0.25rem; color: #1e40af;">
+              <strong>💡 Numeração de Página:</strong> Use <code>{{pageNumber}}</code> para número da página atual e <code>{{totalPages}}</code> para total de páginas. Exemplo: "Página {{pageNumber}} de {{totalPages}}"
+            </div>
+          ` : ''}
+            </div>
+        <div class="inspector-field">
+          <label>Tipo de Link ${createTooltip('Escolha o tipo de link: URL externa, link para página do PDF ou link para destino/âncora.', 'LinkToPage: número da página (ex: 1, 2, 3). LinkToDestination: nome da âncora definida no documento.')}</label>
+          <select id="insp-linkType">
+            <option value="none" ${(!p._linkType && !p.link && !p.linkToPage && !p.linkToDestination) || p._linkType === 'none' ? 'selected' : ''}>Nenhum</option>
+            <option value="url" ${(p._linkType === 'url' || (p.link && !p.linkToPage && !p.linkToDestination)) ? 'selected' : ''}>URL Externa</option>
+            <option value="page" ${p._linkType === 'page' || p.linkToPage ? 'selected' : ''}>Link para Página</option>
+            <option value="destination" ${p._linkType === 'destination' || p.linkToDestination ? 'selected' : ''}>Link para Destino</option>
+          </select>
+        </div>
+        <div id="insp-linkUrlOptions" style="${(p._linkType === 'url' || (p.link && !p.linkToPage && !p.linkToDestination)) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Link (URL)</label>
+            <input type="text" id="insp-link" value="${escapeHtml(p.link || '')}" placeholder="https://exemplo.com">
+            <div class="smallNote">URL externa para o link</div>
+          </div>
+        </div>
+        <div id="insp-linkPageOptions" style="${(p._linkType === 'page' || p.linkToPage) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Número da Página</label>
+            <input type="number" id="insp-linkToPage" value="${p.linkToPage || 1}" min="1" placeholder="1">
+            <div class="smallNote">Número da página para onde o link aponta (começa em 1)</div>
+          </div>
+        </div>
+        <div id="insp-linkDestinationOptions" style="${(p._linkType === 'destination' || p.linkToDestination) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Nome do Destino (ID do elemento destino)</label>
+            <input type="text" id="insp-linkToDestination" value="${escapeHtml(p.linkToDestination || '')}" placeholder="nome-do-destino">
+            <div class="smallNote" style="margin-top: 0.5rem; padding: 0.75rem; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 0.25rem; color: #92400e;">
+              <strong>⚠️ Importante:</strong> O elemento de destino precisa ter um <strong>ID</strong> definido igual a este valor. Exemplo: Se usar "secao1" aqui, o elemento destino deve ter ID="secao1" no campo "ID do Elemento".
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tamanho da Fonte</label>
+              <input type="number" id="insp-fontSize" value="${p.fontSize || 14}" min="8" max="72" step="1">
+              <div id="insp-fontSizeError" style="display: none; margin-top: 0.25rem; padding: 0.25rem; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 0.25rem; color: #991b1b; font-size: 0.75rem;"></div>
+            </div>
+            <div>
+              <label class="smallNote">Fonte</label>
+              <select id="insp-font">
+                <option value="Roboto" ${p.font === 'Roboto' || !p.font ? 'selected' : ''}>Roboto</option>
+                <option value="Courier" ${p.font === 'Courier' ? 'selected' : ''}>Courier</option>
+                <option value="Helvetica" ${p.font === 'Helvetica' ? 'selected' : ''}>Helvetica</option>
+                <option value="Times" ${p.font === 'Times' ? 'selected' : ''}>Times</option>
+              </select>
+            </div>
+            </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Font Features (fontFeatures)</label>
+          <input type="text" id="insp-fontFeatures" value="${p.fontFeatures ? p.fontFeatures.join(', ') : ''}" placeholder="Ex: kern, liga, smcp (separados por vírgula)">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Features tipográficas avançadas (dependem da fonte TTF). Separe por vírgula.</div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Cor do Texto</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-color" value="${p.color || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-colorText" value="${p.color || '#000000'}" placeholder="#000000" style="flex: 1; font-size: 0.875rem;">
+              </div>
+            </div>
+            <div>
+              <label class="smallNote">Cor de Fundo</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-background" value="${p.background || '#ffffff'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-backgroundText" value="${p.background || ''}" placeholder="Deixe vazio para transparente" style="flex: 1; font-size: 0.875rem;">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Alinhamento</label>
+              <select id="insp-alignment">
+                <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+                <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
+                <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+                <option value="justify" ${p.alignment === 'justify' ? 'selected' : ''}>Justificado</option>
+              </select>
+            </div>
+            <div>
+              <label class="smallNote">Decoração</label>
+              <select id="insp-decoration">
+                <option value="" ${!p.decoration ? 'selected' : ''}>Nenhuma</option>
+                <option value="underline" ${p.decoration === 'underline' ? 'selected' : ''}>Sublinhado</option>
+                <option value="lineThrough" ${p.decoration === 'lineThrough' ? 'selected' : ''}>Riscado</option>
+                <option value="overline" ${p.decoration === 'overline' ? 'selected' : ''}>Sobrelinha</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-bold" ${p.bold ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Negrito</span>
+              </label>
+            </div>
+            <div>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-italics" ${p.italics ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Itálico</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Altura da Linha (lineHeight)</label>
+              <input type="number" id="insp-lineHeight" value="${p.lineHeight || ''}" placeholder="Auto" min="0" max="10" step="0.1">
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Deixe vazio para automático</div>
+            </div>
+            <div>
+              <label class="smallNote">Espaçamento entre Caracteres</label>
+              <input type="number" id="insp-characterSpacing" value="${p.characterSpacing || ''}" placeholder="0" min="0" max="10" step="0.1">
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Em unidades (0 = normal)</div>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field" id="decorationOptions" style="${!p.decoration ? 'display: none;' : ''}">
+          <div class="row">
+            <div>
+              <label class="smallNote">Estilo da Decoração</label>
+              <select id="insp-decorationStyle">
+                <option value="solid" ${p.decorationStyle === 'solid' || !p.decorationStyle ? 'selected' : ''}>Sólida</option>
+                <option value="dashed" ${p.decorationStyle === 'dashed' ? 'selected' : ''}>Tracejada</option>
+                <option value="dotted" ${p.decorationStyle === 'dotted' ? 'selected' : ''}>Pontilhada</option>
+                <option value="double" ${p.decorationStyle === 'double' ? 'selected' : ''}>Dupla</option>
+                <option value="wavy" ${p.decorationStyle === 'wavy' ? 'selected' : ''}>Ondulada</option>
+              </select>
+            </div>
+            <div>
+              <label class="smallNote">Cor da Decoração</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-decorationColor" value="${p.decorationColor || p.color || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-decorationColorText" value="${p.decorationColor || ''}" placeholder="Deixe vazio para usar cor do texto" style="flex: 1; font-size: 0.875rem;">
+              </div>
+            </div>
+          </div>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorHeader(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>ID do Elemento (para linkToDestination) ${createTooltip('Define um ID único para este elemento. Outros elementos podem usar linkToDestination apontando para este ID.', 'Exemplo: Se definir id="secao1", outros elementos podem usar linkToDestination: "secao1" para criar um link interno.')}</label>
+          <input type="text" id="insp-headerElementId" value="${escapeHtml(p.id || '')}" placeholder="Ex: secao1, destino1 (deixe vazio se não for destino)">
+          <div class="smallNote">ID único para este elemento. Use para criar destinos de links internos.</div>
+        </div>
+        <div class="inspector-field">
+              <label>Texto do Cabeçalho</label>
+          <input type="text" id="insp-headerText" value="${escapeHtml(p.text || '')}">
+            </div>
+        <div class="inspector-field">
+          <label>Tipo de Link</label>
+          <select id="insp-headerLinkType">
+            <option value="none" ${(!p._linkType && !p.link && !p.linkToPage && !p.linkToDestination) || p._linkType === 'none' ? 'selected' : ''}>Nenhum</option>
+            <option value="url" ${(p._linkType === 'url' || (p.link && !p.linkToPage && !p.linkToDestination)) ? 'selected' : ''}>URL Externa</option>
+            <option value="page" ${p._linkType === 'page' || p.linkToPage ? 'selected' : ''}>Link para Página</option>
+            <option value="destination" ${p._linkType === 'destination' || p.linkToDestination ? 'selected' : ''}>Link para Destino</option>
+          </select>
+        </div>
+        <div id="insp-headerLinkUrlOptions" style="${(p._linkType === 'url' || (p.link && !p.linkToPage && !p.linkToDestination)) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Link (URL)</label>
+            <input type="text" id="insp-headerLink" value="${escapeHtml(p.link || '')}" placeholder="https://exemplo.com">
+            <div class="smallNote">URL externa para o link</div>
+          </div>
+        </div>
+        <div id="insp-headerLinkPageOptions" style="${(p._linkType === 'page' || p.linkToPage) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Número da Página</label>
+            <input type="number" id="insp-headerLinkToPage" value="${p.linkToPage || 1}" min="1" placeholder="1">
+            <div class="smallNote">Número da página para onde o link aponta (começa em 1)</div>
+          </div>
+        </div>
+        <div id="insp-headerLinkDestinationOptions" style="${(p._linkType === 'destination' || p.linkToDestination) ? '' : 'display: none;'}">
+          <div class="inspector-field">
+            <label>Nome do Destino (ID do elemento destino)</label>
+            <input type="text" id="insp-headerLinkToDestination" value="${escapeHtml(p.linkToDestination || '')}" placeholder="nome-do-destino">
+            <div class="smallNote" style="margin-top: 0.5rem; padding: 0.75rem; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 0.25rem; color: #92400e;">
+              <strong>⚠️ Importante:</strong> O elemento de destino precisa ter um <strong>ID</strong> definido igual a este valor. Exemplo: Se usar "secao1" aqui, o elemento destino deve ter ID="secao1" no campo "ID do Elemento".
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tamanho da Fonte</label>
+              <input type="number" id="insp-headerFontSize" value="${p.fontSize || 18}" min="8" max="72">
+            </div>
+            <div>
+              <label class="smallNote">Fonte</label>
+              <select id="insp-headerFont">
+                <option value="Roboto" ${p.font === 'Roboto' || !p.font ? 'selected' : ''}>Roboto</option>
+                <option value="Courier" ${p.font === 'Courier' ? 'selected' : ''}>Courier</option>
+                <option value="Helvetica" ${p.font === 'Helvetica' ? 'selected' : ''}>Helvetica</option>
+                <option value="Times" ${p.font === 'Times' ? 'selected' : ''}>Times</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Font Features (fontFeatures)</label>
+          <input type="text" id="insp-headerFontFeatures" value="${p.fontFeatures ? p.fontFeatures.join(', ') : ''}" placeholder="Ex: kern, liga, smcp (separados por vírgula)">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Features tipográficas avançadas (dependem da fonte TTF). Separe por vírgula.</div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Cor do Texto</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-headerColor" value="${p.color || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-headerColorText" value="${p.color || '#000000'}" placeholder="#000000" style="flex: 1; font-size: 0.875rem;">
+              </div>
+            </div>
+            <div>
+              <label class="smallNote">Cor de Fundo</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-headerBackground" value="${p.background || '#ffffff'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-headerBackgroundText" value="${p.background || ''}" placeholder="Deixe vazio para transparente" style="flex: 1; font-size: 0.875rem;">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Alinhamento</label>
+              <select id="insp-headerAlignment">
+                <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+                <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
+                <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+              </select>
+            </div>
+            <div>
+              <label class="smallNote">Decoração</label>
+              <select id="insp-headerDecoration">
+                <option value="" ${!p.decoration ? 'selected' : ''}>Nenhuma</option>
+                <option value="underline" ${p.decoration === 'underline' ? 'selected' : ''}>Sublinhado</option>
+                <option value="lineThrough" ${p.decoration === 'lineThrough' ? 'selected' : ''}>Riscado</option>
+                <option value="overline" ${p.decoration === 'overline' ? 'selected' : ''}>Sobrelinha</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-headerBold" ${p.bold ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Negrito</span>
+              </label>
+            </div>
+            <div>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-headerItalics" ${p.italics ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Itálico</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Altura da Linha (lineHeight)</label>
+              <input type="number" id="insp-headerLineHeight" value="${p.lineHeight || ''}" placeholder="Auto" min="0" max="10" step="0.1">
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Deixe vazio para automático</div>
+            </div>
+            <div>
+              <label class="smallNote">Espaçamento entre Caracteres</label>
+              <input type="number" id="insp-headerCharacterSpacing" value="${p.characterSpacing || ''}" placeholder="0" min="0" max="10" step="0.1">
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Em unidades (0 = normal)</div>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field" id="headerDecorationOptions" style="${!p.decoration ? 'display: none;' : ''}">
+          <div class="row">
+            <div>
+              <label class="smallNote">Estilo da Decoração</label>
+              <select id="insp-headerDecorationStyle">
+                <option value="solid" ${p.decorationStyle === 'solid' || !p.decorationStyle ? 'selected' : ''}>Sólida</option>
+                <option value="dashed" ${p.decorationStyle === 'dashed' ? 'selected' : ''}>Tracejada</option>
+                <option value="dotted" ${p.decorationStyle === 'dotted' ? 'selected' : ''}>Pontilhada</option>
+                <option value="double" ${p.decorationStyle === 'double' ? 'selected' : ''}>Dupla</option>
+                <option value="wavy" ${p.decorationStyle === 'wavy' ? 'selected' : ''}>Ondulada</option>
+              </select>
+            </div>
+            <div>
+              <label class="smallNote">Cor da Decoração</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-headerDecorationColor" value="${p.decorationColor || p.color || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-headerDecorationColorText" value="${p.decorationColor || ''}" placeholder="Deixe vazio para usar cor do texto" style="flex: 1; font-size: 0.875rem;">
+              </div>
+            </div>
+          </div>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorColumns(element) {
+      const p = element.properties || {};
+      const cols = p.columns || [{ text: 'Coluna 1', width: '*' }, { text: 'Coluna 2', width: '*' }];
+      return `
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Número de Colunas</label>
+              <input type="number" id="insp-colCount" value="${cols.length}" min="2" max="6">
+              </div>
+            <div>
+              <label class="smallNote">Espaçamento (gap)</label>
+              <input type="number" id="insp-colGap" value="${p.gap || 10}" min="0" max="50">
+            </div>
+            </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento Vertical</label>
+          <select id="insp-colValign">
+            <option value="top" ${p.valign === 'top' || !p.valign ? 'selected' : ''}>Topo</option>
+            <option value="center" ${p.valign === 'center' ? 'selected' : ''}>Centro</option>
+            <option value="bottom" ${p.valign === 'bottom' ? 'selected' : ''}>Inferior</option>
+          </select>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Alinhamento vertical do conteúdo dentro das colunas</div>
+        </div>
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Larguras das Colunas</label>
+          ${cols.map((col, idx) => {
+        const width = col.width || '*';
+        let widthType = 'auto';
+        let widthValue = '';
+
+        if (width === '*') {
+          widthType = 'auto';
+        } else if (width === 'auto') {
+          widthType = 'auto';
+        } else if (typeof width === 'number') {
+          widthType = 'pixels';
+          widthValue = width;
+        } else if (typeof width === 'string' && width.endsWith('%')) {
+          widthType = 'percentage';
+          widthValue = width.replace('%', '');
+        } else {
+          widthType = 'auto';
+        }
+
+        return `
+              <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                  <label style="font-weight: 500; color: var(--text-primary);">Coluna ${idx + 1}</label>
+                  ${idx > 0 ? `
+                    <button type="button" class="btn-delete-col" data-col-index="${idx}" style="padding: 0.25rem 0.5rem; background: #ef4444; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">🗑️</button>
+                  ` : ''}
+            </div>
+                <div class="row">
+                  <div style="flex: 1;">
+                    <label class="smallNote">Tipo de Largura</label>
+                    <select class="col-width-type" data-col-index="${idx}">
+                      <option value="auto" ${widthType === 'auto' ? 'selected' : ''}>Automático (*)</option>
+                      <option value="pixels" ${widthType === 'pixels' ? 'selected' : ''}>Pixels (px)</option>
+                      <option value="percentage" ${widthType === 'percentage' ? 'selected' : ''}>Porcentagem (%)</option>
+                    </select>
+              </div>
+                  <div style="flex: 1; ${widthType === 'auto' ? 'display: none;' : ''}" id="col-width-value-${idx}">
+                    <label class="smallNote">Valor</label>
+                    <input type="number" class="col-width-value" data-col-index="${idx}" value="${widthValue}" min="0" step="${widthType === 'percentage' ? '1' : '1'}" placeholder="${widthType === 'percentage' ? '50' : '100'}">
+              </div>
+            </div>
+            </div>
+          `;
+      }).join('')}
+          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">
+            <strong style="color: var(--text-primary);">Tipos de largura:</strong><br>
+            • Automático (*): divide o espaço igualmente entre as colunas<br>
+            • Pixels: largura fixa em pontos (ex: 100, 200)<br>
+            • Porcentagem: largura em % do espaço disponível (ex: 30, 50)
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label>Conteúdo das Colunas (uma por linha, separado por "---")</label>
+          <textarea id="insp-colTexts" placeholder="Coluna 1&#10;---&#10;Coluna 2">${cols.map(c => c.text || '').join('\n---\n')}</textarea>
+          <div class="smallNote">Use "---" em uma linha separada para dividir as colunas</div>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorList(element) {
+      const p = element.properties || {};
+      const items = p.items || [{ kind: 'text', text: 'Item 1' }, { kind: 'text', text: 'Item 2' }];
+      const textItems = items.filter(item => item.kind === 'text').map(item => item.text || '').join('\n');
+      const isOrdered = p.ordered || p.listType === 'ol';
+      return `
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tipo</label>
+              <select id="insp-listKind">
+                <option value="ul" ${!isOrdered ? 'selected' : ''}>Não ordenada (ul)</option>
+                <option value="ol" ${isOrdered ? 'selected' : ''}>Ordenada (ol)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        ${isOrdered ? `
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Número Inicial (start)</label>
+              <input type="number" id="insp-listStart" value="${p.start || 1}" min="1" max="1000">
+            </div>
+            <div>
+              <label class="smallNote">Tipo de Marcador</label>
+              <select id="insp-listType">
+                <option value="decimal" ${p.type === 'decimal' || !p.type ? 'selected' : ''}>Decimal (1, 2, 3...)</option>
+                <option value="lower-alpha" ${p.type === 'lower-alpha' ? 'selected' : ''}>Minúsculas (a, b, c...)</option>
+                <option value="upper-alpha" ${p.type === 'upper-alpha' ? 'selected' : ''}>Maiúsculas (A, B, C...)</option>
+                <option value="lower-roman" ${p.type === 'lower-roman' ? 'selected' : ''}>Romano minúsculo (i, ii, iii...)</option>
+                <option value="upper-roman" ${p.type === 'upper-roman' ? 'selected' : ''}>Romano maiúsculo (I, II, III...)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label><input type="checkbox" id="insp-listReversed" ${p.reversed ? 'checked' : ''}> Lista Reversa (reversed)</label>
+          <div class="smallNote">Inverte a ordem numérica da lista</div>
+        </div>
+        ` : `
+        <div class="inspector-field">
+          <label class="smallNote">Tipo de Marcador</label>
+          <select id="insp-listType">
+            <option value="disc" ${p.type === 'disc' || !p.type ? 'selected' : ''}>Disco preenchido (●)</option>
+            <option value="circle" ${p.type === 'circle' ? 'selected' : ''}>Círculo vazio (○)</option>
+            <option value="square" ${p.type === 'square' ? 'selected' : ''}>Quadrado (■)</option>
+          </select>
+        </div>
+        `}
+        <div class="inspector-field">
+          <label>Itens de Texto (um por linha)</label>
+          <textarea id="insp-listItems">${textItems}</textarea>
+          <div class="smallNote">Você também pode arrastar elementos diretamente na lista para criar itens complexos.</div>
+        </div>
+        <div class="inspector-field">
+          <div class="smallNote">Itens com elementos aninhados: ${items.filter(item => item.kind === 'node').length}</div>
+        </div>
+        ${!isOrdered ? `
+        <div class="inspector-field">
+          <label class="smallNote">Cor dos Marcadores (markerColor)</label>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="color" id="insp-markerColor" value="${p.markerColor || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+            <input type="text" id="insp-markerColorText" value="${p.markerColor || ''}" placeholder="Deixe vazio para usar cor padrão" style="flex: 1; font-size: 0.875rem;">
+          </div>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Aplica-se apenas a listas não ordenadas (ul)</div>
+        </div>
+        ` : ''}
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorTable(element) {
+      const p = element.properties || {};
+      const body = p.body || [];
+      const numRows = body.length || 2;
+      const numCols = body[0]?.length || 3;
+      const numDataRows = Math.max(0, numRows - 1); // Linhas de dados (excluindo header)
+
+      return `
+        <div class="inspector-field">
+          <div class="smallNote" style="padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: #1e40af;">
+            <strong>📋 Estrutura da Tabela:</strong><br>
+            • <strong>Linha 1</strong> = Cabeçalho (nomes das colunas)<br>
+            • <strong>Linhas ${numRows > 1 ? '2-' + numRows : '2'}</strong> = Dados da tabela
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Colunas</label>
+              <input type="number" id="insp-tableCols" value="${numCols}" min="1" max="10">
+            </div>
+            <div>
+              <label class="smallNote">Linhas de Dados</label>
+              <input type="number" id="insp-tableRows" value="${numDataRows}" min="1" max="20">
+              <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">
+                (Total: ${numRows} linhas incluindo cabeçalho)
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Linhas de Cabeçalho (headerRows) ${createTooltip('Define quantas linhas da tabela serão repetidas em cada página como cabeçalho.', 'Padrão: 1 linha. Se definir 2, as duas primeiras linhas serão cabeçalho.')}</label>
+          <input type="number" id="insp-tableHeaderRows" value="${p.headerRows !== undefined ? p.headerRows : 1}" min="0" max="${numRows}">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">
+            Número de linhas que serão consideradas como cabeçalho (padrão: 1)
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Layout</label>
+          <select id="insp-tableLayout">
+            <option value="lightHorizontalLines" ${p.layout === 'lightHorizontalLines' || !p.layout ? 'selected' : ''}>Linhas Horizontais</option>
+            <option value="headerLineOnly" ${p.layout === 'headerLineOnly' ? 'selected' : ''}>Apenas Header</option>
+            <option value="noBorders" ${p.layout === 'noBorders' ? 'selected' : ''}>Sem Bordas</option>
+            <option value="custom" ${p.layout === 'custom' || (p.customLayout && Object.keys(p.customLayout).length > 0) ? 'selected' : ''}>Customizado</option>
+          </select>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Escolha "Customizado" para definir cores e larguras das linhas manualmente</div>
+        </div>
+        
+        ${(p.layout === 'custom' || (p.customLayout && Object.keys(p.customLayout).length > 0)) ? `
+        <div style="margin-top: 0.5rem;">
+          <button type="button" id="btn-show-custom-layout" onclick="document.getElementById('tableCustomLayoutOptions').style.display = 'block'; this.style.display = 'none';" style="padding: 0.5rem; background: #2563eb; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">Mostrar Opções de Layout Customizado</button>
+        </div>
+        ` : ''}
+        ${(p.layout === 'custom' || (p.customLayout && Object.keys(p.customLayout).length > 0)) ? `
+        <div class="inspector-field" id="tableCustomLayoutOptions">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Layout Customizado</label>
+          
+          <div style="margin-bottom: 1rem;">
+            <label class="smallNote" style="color: var(--text-secondary);">Linhas Horizontais</label>
+            <div class="row" style="margin-top: 0.5rem;">
+              <div style="flex: 1;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Largura (px)</label>
+                <input type="number" id="insp-tableHLineWidth" value="${p.customLayout?.hLineWidth || 1}" min="0" max="10" step="0.1" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+              </div>
+              <div style="flex: 1;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Cor</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <input type="color" id="insp-tableHLineColor" value="${p.customLayout?.hLineColor || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+                  <input type="text" id="insp-tableHLineColorText" value="${p.customLayout?.hLineColor || '#000000'}" placeholder="#000000" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1rem;">
+            <label class="smallNote" style="color: var(--text-secondary);">Linhas Verticais</label>
+            <div class="row" style="margin-top: 0.5rem;">
+              <div style="flex: 1;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Largura (px)</label>
+                <input type="number" id="insp-tableVLineWidth" value="${p.customLayout?.vLineWidth || 1}" min="0" max="10" step="0.1" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+              </div>
+              <div style="flex: 1;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Cor</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <input type="color" id="insp-tableVLineColor" value="${p.customLayout?.vLineColor || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+                  <input type="text" id="insp-tableVLineColorText" value="${p.customLayout?.vLineColor || '#000000'}" placeholder="#000000" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1rem;">
+            <label class="smallNote" style="color: var(--text-secondary);">Padding das Células</label>
+            <div class="row" style="margin-top: 0.5rem;">
+              <div style="flex: 1;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Esquerda</label>
+                <input type="number" id="insp-tablePaddingLeft" value="${p.customLayout?.paddingLeft || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+              </div>
+              <div style="flex: 1;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Direita</label>
+                <input type="number" id="insp-tablePaddingRight" value="${p.customLayout?.paddingRight || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+              </div>
+            </div>
+            <div class="row" style="margin-top: 0.5rem;">
+              <div style="flex: 1;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Topo</label>
+                <input type="number" id="insp-tablePaddingTop" value="${p.customLayout?.paddingTop || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+              </div>
+              <div style="flex: 1;">
+                <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Inferior</label>
+                <input type="number" id="insp-tablePaddingBottom" value="${p.customLayout?.paddingBottom || 5}" min="0" max="50" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1rem;">
+            <label class="smallNote" style="color: var(--text-secondary);">Estilos de Linhas (Dashed)</label>
+            <div class="row" style="margin-top: 0.5rem;">
+              <div style="flex: 1;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="insp-tableHLineStyle" ${p.customLayout?.hLineStyle ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Linhas Horizontais Tracejadas</span>
+                </label>
+                <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
+                  Aplica estilo tracejado nas linhas horizontais
+                </div>
+              </div>
+              <div style="flex: 1;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="insp-tableVLineStyle" ${p.customLayout?.vLineStyle ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Linhas Verticais Tracejadas</span>
+                </label>
+                <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
+                  Aplica estilo tracejado nas linhas verticais
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 1rem;">
+            <label class="smallNote" style="color: var(--text-secondary);">Borda Padrão (defaultBorder)</label>
+            <div style="margin-top: 0.5rem;">
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-tableDefaultBorder" ${p.customLayout?.defaultBorder !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Usar Bordas Padrão</span>
+              </label>
+              <div class="smallNote" style="margin-top: 0.25rem; color: var(--text-tertiary); font-size: 0.75rem;">
+                Se desmarcado, apenas células com border definido terão bordas
+              </div>
+            </div>
+          </div>
+        </div>
+        ` : ''}
+        
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Tabela Zebrada</label>
+          <div style="margin-bottom: 1rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+              <input type="checkbox" id="insp-tableZebraEnabled" ${p.zebraEnabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Ativar Tabela Zebrada</span>
+            </label>
+            <div class="smallNote" style="margin-top: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
+              Alterna cores de fundo entre linhas para facilitar a leitura
+            </div>
+          </div>
+          
+          ${p.zebraEnabled ? `
+          <div id="tableZebraOptions" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
+            <div style="margin-bottom: 1rem;">
+              <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Cor Base (linhas pares)</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-tableZebraColor" value="${p.zebraColor || '#CCCCCC'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-tableZebraColorText" value="${p.zebraColor || '#CCCCCC'}" placeholder="#CCCCCC" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+              </div>
+              <div class="smallNote" style="margin-top: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
+                A cor das linhas ímpares será gerada automaticamente com 50% de opacidade
+              </div>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-tableZebraWithLines" ${p.zebraWithLines !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Mostrar Linhas Horizontais</span>
+              </label>
+              <div class="smallNote" style="margin-top: 0.5rem; color: var(--text-tertiary); font-size: 0.75rem;">
+                Adiciona linhas horizontais entre as linhas da tabela
+              </div>
+            </div>
+          </div>
+          ` : ''}
+        </div>
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Estilos das Células</label>
+          <div class="smallNote" style="margin-bottom: 0.75rem; color: var(--text-tertiary); font-size: 0.75rem;">
+            Configure cores de fundo e texto para as células da tabela. A primeira linha é o cabeçalho.
+          </div>
+          
+          ${Array.from({ length: numRows }, (_, rowIdx) => {
+        const isHeader = rowIdx === 0;
+        return Array.from({ length: numCols }, (_, colIdx) => {
+          const cell = body[rowIdx]?.[colIdx] || { children: [] };
+          const cellFillColor = cell.fillColor || '';
+          const cellColor = cell.color || '';
+          const cellFillOpacity = cell.fillOpacity !== undefined ? cell.fillOpacity : 1;
+
+          return `
+                <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
+                  <label style="font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem; display: block;">
+                    ${isHeader ? '🔵' : '⚪'} ${isHeader ? 'Cabeçalho' : 'Linha'} ${rowIdx + 1}, Coluna ${colIdx + 1}
+                  </label>
+                  
+                  <div style="margin-bottom: 0.5rem;">
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Cor de Fundo (fillColor)</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                      <input type="color" class="table-cell-fill-color" data-row="${rowIdx}" data-col="${colIdx}" value="${cellFillColor || '#ffffff'}" style="width: 50px; height: 32px; cursor: pointer;">
+                      <input type="text" class="table-cell-fill-color-text" data-row="${rowIdx}" data-col="${colIdx}" value="${cellFillColor || ''}" placeholder="Deixe vazio para transparente" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                    </div>
+                  </div>
+                  
+                  <div style="margin-bottom: 0.5rem;">
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Cor do Texto (color)</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                      <input type="color" class="table-cell-color" data-row="${rowIdx}" data-col="${colIdx}" value="${cellColor || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+                      <input type="text" class="table-cell-color-text" data-row="${rowIdx}" data-col="${colIdx}" value="${cellColor || ''}" placeholder="Deixe vazio para cor padrão" style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Opacidade do Fundo (fillOpacity)</label>
+                    <input type="number" class="table-cell-fill-opacity" data-row="${rowIdx}" data-col="${colIdx}" value="${cellFillOpacity}" min="0" max="1" step="0.1" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                  </div>
+                </div>
+              `;
+        }).join('')
+      }).join('')}
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="insp-tableDontBreakRows" ${p.dontBreakRows ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Não Quebrar Linhas</span>
+              </label>
+              <div class="smallNote">Previne quebra de linhas entre páginas</div>
+            </div>
+            <div>
+              <label class="smallNote">Manter com Header (keepWithHeaderRows)</label>
+              <input type="number" id="insp-tableKeepWithHeaderRows" value="${p.keepWithHeaderRows || 0}" min="0" max="10">
+              <div class="smallNote">Número de linhas para manter com cabeçalho</div>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Larguras das Colunas</label>
+          ${Array.from({ length: numCols }, (_, idx) => {
+        const widths = p.widths || [];
+        const width = widths[idx] || '*';
+        let widthType = 'auto';
+        let widthValue = '';
+
+        if (width === '*' || width === 'auto') {
+          widthType = 'auto';
+        } else if (typeof width === 'number') {
+          widthType = 'pixels';
+          widthValue = width;
+        } else if (typeof width === 'string' && width.endsWith('%')) {
+          widthType = 'percentage';
+          widthValue = width.replace('%', '');
+        } else {
+          widthType = 'auto';
+        }
+
+        return `
+              <div style="margin-bottom: 0.75rem; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                  <label style="font-weight: 500; color: var(--text-primary);">Coluna ${idx + 1}</label>
+                  ${idx > 0 ? `
+                    <button type="button" class="btn-delete-table-col" data-col-index="${idx}" style="padding: 0.25rem 0.5rem; background: #ef4444; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">🗑️</button>
+                  ` : ''}
+                </div>
+                <div class="row">
+                  <div style="flex: 1;">
+                    <label class="smallNote" style="color: var(--text-secondary);">Tipo de Largura</label>
+                    <select class="table-col-width-type" data-col-index="${idx}" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                      <option value="auto" ${widthType === 'auto' ? 'selected' : ''}>Automático (*)</option>
+                      <option value="pixels" ${widthType === 'pixels' ? 'selected' : ''}>Pixels (px)</option>
+                      <option value="percentage" ${widthType === 'percentage' ? 'selected' : ''}>Porcentagem (%)</option>
+                    </select>
+                  </div>
+                  <div style="flex: 1; ${widthType === 'auto' ? 'display: none;' : ''}" id="table-col-width-value-${idx}">
+                    <label class="smallNote" style="color: var(--text-secondary);">Valor</label>
+                    <input type="number" class="table-col-width-value" data-col-index="${idx}" value="${widthValue}" min="0" step="${widthType === 'percentage' ? '1' : '1'}" placeholder="${widthType === 'percentage' ? '50' : '100'}" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                  </div>
+                </div>
+              </div>
+            `;
+      }).join('')}
+          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">
+            <strong style="color: var(--text-primary);">Tipos de largura:</strong><br>
+            • Automático (*): divide o espaço igualmente entre as colunas<br>
+            • Pixels: largura fixa em pontos (ex: 100, 200)<br>
+            • Porcentagem: largura em % do espaço disponível (ex: 30, 50)
+          </div>
+        </div>
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Altura das Linhas (heights)</label>
+          <div class="smallNote" style="margin-bottom: 0.75rem; color: var(--text-tertiary); font-size: 0.75rem;">
+            Defina a altura das linhas da tabela. Pode ser um valor fixo para todas, um array por linha, ou uma função.
+          </div>
+          <div class="row">
+            <div style="flex: 1;">
+              <label class="smallNote">Tipo</label>
+              <select id="insp-tableHeightsType">
+                <option value="none" ${!p.heights ? 'selected' : ''}>Não Definir</option>
+                <option value="fixed" ${p.heights && typeof p.heights === 'number' ? 'selected' : ''}>Valor Fixo (todas as linhas)</option>
+                <option value="array" ${p.heights && Array.isArray(p.heights) ? 'selected' : ''}>Array (por linha)</option>
+              </select>
+            </div>
+            <div style="flex: 1; ${!p.heights || typeof p.heights !== 'number' ? 'display: none;' : ''}" id="table-heights-fixed">
+              <label class="smallNote">Altura Fixa (px)</label>
+              <input type="number" id="insp-tableHeightsFixed" value="${p.heights && typeof p.heights === 'number' ? p.heights : 40}" min="0" step="1">
+            </div>
+          </div>
+          ${p.heights && Array.isArray(p.heights) ? `
+          <div style="margin-top: 1rem;">
+            <label class="smallNote" style="color: var(--text-secondary); margin-bottom: 0.5rem; display: block;">Alturas por Linha</label>
+            ${Array.from({ length: numRows }, (_, idx) => {
+        const height = p.heights[idx] || 40;
+        return `
+                <div style="margin-bottom: 0.5rem;">
+                  <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">Linha ${idx + 1}</label>
+                  <input type="number" class="table-row-height" data-row="${idx}" value="${height}" min="0" step="1" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+                </div>
+              `;
+      }).join('')}
+          </div>
+          ` : ''}
+        </div>
+        <div class="inspector-field" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">Propriedades Avançadas das Células</label>
+          <div class="smallNote" style="margin-bottom: 0.75rem; color: var(--text-tertiary); font-size: 0.75rem;">
+            Configure rowSpan, colSpan, border e borderColor para células individuais.
+          </div>
+          
+          ${Array.from({ length: numRows }, (_, rowIdx) => {
+        const isHeader = rowIdx === 0;
+        return Array.from({ length: numCols }, (_, colIdx) => {
+          const cell = body[rowIdx]?.[colIdx] || { children: [] };
+          const rowSpan = cell.rowSpan || 1;
+          const colSpan = cell.colSpan || 1;
+          const border = cell.border || [true, true, true, true];
+          const borderColor = cell.borderColor || ['', '', '', ''];
+
+          return `
+                <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem;">
+                  <label style="font-weight: 500; color: var(--text-primary); margin-bottom: 0.75rem; display: block;">
+                    ${isHeader ? '🔵' : '⚪'} ${isHeader ? 'Cabeçalho' : 'Linha'} ${rowIdx + 1}, Coluna ${colIdx + 1}
+                  </label>
+                  
+                  <div class="row" style="margin-bottom: 0.75rem;">
+                    <div style="flex: 1;">
+                      <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">rowSpan</label>
+                      <input type="number" class="table-cell-rowspan" data-row="${rowIdx}" data-col="${colIdx}" value="${rowSpan}" min="1" max="10" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+            </div>
+                    <div style="flex: 1;">
+                      <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem;">colSpan</label>
+                      <input type="number" class="table-cell-colspan" data-row="${rowIdx}" data-col="${colIdx}" value="${colSpan}" min="1" max="10" style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.375rem; font-size: 0.875rem;">
+            </div>
+                  </div>
+                  
+                  <div style="margin-bottom: 0.75rem;">
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Bordas (border) - [esquerda, topo, direita, inferior]</label>
+                    <div class="row">
+                      <div style="flex: 1;">
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Esquerda</label>
+                        <input type="checkbox" class="table-cell-border" data-row="${rowIdx}" data-col="${colIdx}" data-side="0" ${border[0] ? 'checked' : ''} style="width: 100%;">
+                      </div>
+                      <div style="flex: 1;">
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Topo</label>
+                        <input type="checkbox" class="table-cell-border" data-row="${rowIdx}" data-col="${colIdx}" data-side="1" ${border[1] ? 'checked' : ''} style="width: 100%;">
+                      </div>
+                      <div style="flex: 1;">
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Direita</label>
+                        <input type="checkbox" class="table-cell-border" data-row="${rowIdx}" data-col="${colIdx}" data-side="2" ${border[2] ? 'checked' : ''} style="width: 100%;">
+                      </div>
+                      <div style="flex: 1;">
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Inferior</label>
+                        <input type="checkbox" class="table-cell-border" data-row="${rowIdx}" data-col="${colIdx}" data-side="3" ${border[3] ? 'checked' : ''} style="width: 100%;">
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label class="smallNote" style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem; display: block;">Cores das Bordas (borderColor) - [esquerda, topo, direita, inferior]</label>
+                    <div class="row">
+                      <div style="flex: 1;">
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Esquerda</label>
+                        <input type="color" class="table-cell-border-color" data-row="${rowIdx}" data-col="${colIdx}" data-side="0" value="${borderColor[0] || '#000000'}" style="width: 100%; height: 32px; cursor: pointer;">
+                      </div>
+                      <div style="flex: 1;">
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Topo</label>
+                        <input type="color" class="table-cell-border-color" data-row="${rowIdx}" data-col="${colIdx}" data-side="1" value="${borderColor[1] || '#000000'}" style="width: 100%; height: 32px; cursor: pointer;">
+                      </div>
+                      <div style="flex: 1;">
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Direita</label>
+                        <input type="color" class="table-cell-border-color" data-row="${rowIdx}" data-col="${colIdx}" data-side="2" value="${borderColor[2] || '#000000'}" style="width: 100%; height: 32px; cursor: pointer;">
+                      </div>
+                      <div style="flex: 1;">
+                        <label class="smallNote" style="color: var(--text-secondary); font-size: 0.7rem;">Inferior</label>
+                        <input type="color" class="table-cell-border-color" data-row="${rowIdx}" data-col="${colIdx}" data-side="3" value="${borderColor[3] || '#000000'}" style="width: 100%; height: 32px; cursor: pointer;">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `;
+        }).join('')
+      }).join('')}
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorImage(element) {
+      const p = element.properties || {};
+      const useFit = p.fit !== undefined;
+      const useCover = p.cover !== undefined;
+      const useAbsolutePosition = p.absolutePosition !== undefined;
+      const useRelativePosition = p.relativePosition !== undefined;
+      return `
+        <div class="inspector-field">
+          <label>URL da Imagem</label>
+          <input type="text" id="insp-imageUrl" value="${escapeHtml(p.url || '')}" placeholder="https://exemplo.com/imagem.jpg">
+          <div id="insp-imageUrlError" style="display: none; margin-top: 0.5rem; padding: 0.5rem; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 0.25rem; color: #991b1b; font-size: 0.875rem;"></div>
+          <div class="smallNote">Cole a URL completa da imagem (http://, https:// ou data:image)</div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Modo de Dimensionamento</label>
+          <select id="insp-imageSizeMode">
+            <option value="widthHeight" ${!useFit && !useCover ? 'selected' : ''}>Largura e Altura</option>
+            <option value="fit" ${useFit ? 'selected' : ''}>Fit (Ajustar mantendo proporção)</option>
+            <option value="cover" ${useCover ? 'selected' : ''}>Cover (Preencher área)</option>
+              </select>
+            </div>
+        <div id="imageWidthHeightOptions" style="${useFit || useCover ? 'display: none;' : ''}">
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">Largura</label>
+                <input type="number" id="insp-imageWidth" value="${p.width || ''}" min="10" max="500" placeholder="Auto">
+              </div>
+              <div>
+                <label class="smallNote">Altura</label>
+                <input type="number" id="insp-imageHeight" value="${p.height || ''}" min="10" max="500" placeholder="Auto">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="imageFitOptions" style="${!useFit ? 'display: none;' : ''}">
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">Fit Width</label>
+                <input type="number" id="insp-imageFitWidth" value="${Array.isArray(p.fit) ? p.fit[0] : (p.fit || 100)}" min="10" max="500">
+              </div>
+              <div>
+                <label class="smallNote">Fit Height</label>
+                <input type="number" id="insp-imageFitHeight" value="${Array.isArray(p.fit) ? p.fit[1] : (p.fit || 100)}" min="10" max="500">
+              </div>
+            </div>
+            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Ajusta a imagem mantendo a proporção</div>
+          </div>
+        </div>
+        <div id="imageCoverOptions" style="${!useCover ? 'display: none;' : ''}">
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">Cover Width</label>
+                <input type="number" id="insp-imageCoverWidth" value="${p.cover?.width || 300}" min="10" max="500">
+              </div>
+              <div>
+                <label class="smallNote">Cover Height</label>
+                <input type="number" id="insp-imageCoverHeight" value="${p.cover?.height || 150}" min="10" max="500">
+              </div>
+            </div>
+          </div>
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">Cover Align</label>
+                <select id="insp-imageCoverAlign">
+                  <option value="left" ${p.cover?.align === 'left' ? 'selected' : ''}>Esquerda</option>
+                  <option value="center" ${p.cover?.align === 'center' || !p.cover?.align ? 'selected' : ''}>Centro</option>
+                  <option value="right" ${p.cover?.align === 'right' ? 'selected' : ''}>Direita</option>
+                </select>
+              </div>
+              <div>
+                <label class="smallNote">Cover Valign</label>
+                <select id="insp-imageCoverValign">
+                  <option value="top" ${p.cover?.valign === 'top' ? 'selected' : ''}>Topo</option>
+                  <option value="center" ${p.cover?.valign === 'center' || !p.cover?.valign ? 'selected' : ''}>Centro</option>
+                  <option value="bottom" ${p.cover?.valign === 'bottom' ? 'selected' : ''}>Inferior</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Border Radius</label>
+          <input type="number" id="insp-imageBorderRadius" value="${p.borderRadius || 0}" min="0" max="1000" step="1" placeholder="0">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Apenas o número (ex: 30, 50, 100). 0 = sem arredondamento</div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Opacidade (0.0 - 1.0)</label>
+          <input type="number" id="insp-imageOpacity" value="${p.opacity !== undefined ? p.opacity : ''}" placeholder="1.0" min="0" max="1" step="0.1">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">1.0 = totalmente opaco, 0.0 = transparente</div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-imageAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Tipo de Posicionamento</label>
+          <select id="insp-imagePositionType">
+            <option value="none" ${!useAbsolutePosition && !useRelativePosition ? 'selected' : ''}>Normal (fluxo do documento)</option>
+            <option value="absolute" ${useAbsolutePosition ? 'selected' : ''}>Posição Absoluta</option>
+            <option value="relative" ${useRelativePosition ? 'selected' : ''}>Posição Relativa</option>
+          </select>
+        </div>
+        <div id="imageAbsolutePositionOptions" style="${!useAbsolutePosition ? 'display: none;' : ''}">
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">X (absoluto)</label>
+                <input type="number" id="insp-imageAbsoluteX" value="${p.absolutePosition?.x || 0}" min="0" step="1">
+              </div>
+              <div>
+                <label class="smallNote">Y (absoluto)</label>
+                <input type="number" id="insp-imageAbsoluteY" value="${p.absolutePosition?.y || 0}" min="0" step="1">
+              </div>
+            </div>
+            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Posição em pixels a partir do canto superior esquerdo da página</div>
+          </div>
+        </div>
+        <div id="imageRelativePositionOptions" style="${!useRelativePosition ? 'display: none;' : ''}">
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">X (relativo)</label>
+                <input type="number" id="insp-imageRelativeX" value="${p.relativePosition?.x || 0}" step="1">
+              </div>
+              <div>
+                <label class="smallNote">Y (relativo)</label>
+                <input type="number" id="insp-imageRelativeY" value="${p.relativePosition?.y || 0}" step="1">
+              </div>
+            </div>
+            <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Deslocamento relativo à posição atual no fluxo do documento</div>
+          </div>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorMargin(element) {
+      const p = element.properties || {};
+      // Suportar tanto o formato antigo (size) quanto o novo (margin array)
+      const marginArray = p.margin || (p.size ? [0, p.size, 0, 0] : [0, 20, 0, 0]);
+      return `
+        <div class="inspector-field">
+          <label>Margens Individuais (px)</label>
+          <div class="smallNote" style="margin-bottom: 0.5rem;">Configure as margens: [Esquerda, Topo, Direita, Baixo]</div>
+          <div class="row">
+            <div>
+              <label class="smallNote">Esquerda</label>
+              <input type="number" id="insp-marginLeft" value="${marginArray[0] || 0}" min="0" step="1">
+            </div>
+            <div>
+              <label class="smallNote">Topo</label>
+              <input type="number" id="insp-marginTop" value="${marginArray[1] || 20}" min="0" step="1">
+            </div>
+            <div>
+              <label class="smallNote">Direita</label>
+              <input type="number" id="insp-marginRight" value="${marginArray[2] || 0}" min="0" step="1">
+            </div>
+            <div>
+              <label class="smallNote">Baixo</label>
+              <input type="number" id="insp-marginBottom" value="${marginArray[3] || 0}" min="0" step="1">
+            </div>
+          </div>
+          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">Formato PDFMake: [left, top, right, bottom]</div>
+            </div>
+          `;
+    }
+
+    // Função auxiliar para renderizar seção de margens (reutilizável para todos os elementos)
+    function renderMarginSection(element) {
+      const p = element.properties || {};
+      const marginArray = p.margin || [0, 0, 0, 0];
+      return `
+        <div class="inspector-field" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+          <label style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">Margens (px)</label>
+          <div class="row">
+            <div>
+              <label class="smallNote">Esquerda</label>
+              <input type="number" class="margin-input" data-side="0" value="${marginArray[0] || 0}" min="0" step="1" placeholder="0">
+            </div>
+            <div>
+              <label class="smallNote">Topo</label>
+              <input type="number" class="margin-input" data-side="1" value="${marginArray[1] || 0}" min="0" step="1" placeholder="0">
+            </div>
+            <div>
+              <label class="smallNote">Direita</label>
+              <input type="number" class="margin-input" data-side="2" value="${marginArray[2] || 0}" min="0" step="1" placeholder="0">
+            </div>
+            <div>
+              <label class="smallNote">Baixo</label>
+              <input type="number" class="margin-input" data-side="3" value="${marginArray[3] || 0}" min="0" step="1" placeholder="0">
+            </div>
+          </div>
+          <div class="smallNote" style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">Formato: [left, top, right, bottom]</div>
+        </div>
+      `;
+    }
+
+    function renderInspectorPageBreak(element) {
+      return `
+        <div class="inspector-field">
+          <div class="smallNote">Quebra de página - não há propriedades configuráveis para este elemento.</div>
+            </div>
+          `;
+    }
+
+    function renderInspectorQR(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>Texto/Dados para QR Code</label>
+          <textarea id="insp-qrText" placeholder="URL, texto ou dados para codificar" style="min-height: 60px;">${escapeHtml(p.text || '')}</textarea>
+          <div class="smallNote">Pode ser uma URL, texto ou qualquer dado que você queira codificar no QR Code</div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tamanho (fit)</label>
+              <input type="number" id="insp-qrFit" value="${p.fit || 100}" min="50" max="500">
+            </div>
+            <div>
+              <label class="smallNote">Nível de Correção</label>
+              <select id="insp-qrEccLevel">
+                <option value="L" ${p.eccLevel === 'L' ? 'selected' : ''}>L (Baixo - 7%)</option>
+                <option value="M" ${p.eccLevel === 'M' || !p.eccLevel ? 'selected' : ''}>M (Médio - 15%)</option>
+                <option value="Q" ${p.eccLevel === 'Q' ? 'selected' : ''}>Q (Alto - 25%)</option>
+                <option value="H" ${p.eccLevel === 'H' ? 'selected' : ''}>H (Muito Alto - 30%)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Cor do QR Code</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-qrForeground" value="${p.foreground || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-qrForegroundText" value="${p.foreground || '#000000'}" placeholder="#000000" style="flex: 1; font-size: 0.875rem;">
+              </div>
+            </div>
+            <div>
+              <label class="smallNote">Cor de Fundo</label>
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <input type="color" id="insp-qrBackground" value="${p.background || '#ffffff'}" style="width: 50px; height: 32px; cursor: pointer;">
+                <input type="text" id="insp-qrBackgroundText" value="${p.background || '#ffffff'}" placeholder="#ffffff" style="flex: 1; font-size: 0.875rem;">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-qrAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+              </select>
+            </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorSVG(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>Código SVG</label>
+          <div class="smallNote" style="padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: #1e40af;">
+            <strong>💡 Dica:</strong> Crie ou edite SVGs facilmente em 
+            <a href="https://www.svgviewer.dev/" target="_blank" rel="noopener noreferrer" style="color: #1e40af; text-decoration: underline; font-weight: 500;">svgviewer.dev</a>
+            e depois cole o código aqui.
+          </div>
+          <textarea id="insp-svgCode" placeholder="Cole ou digite o código SVG aqui" style="min-height: 120px; font-family: monospace; font-size: 0.875rem; width: 100%; padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 0.375rem; color: var(--text-primary); box-sizing: border-box; resize: vertical;">${escapeHtml(p.svg || '')}</textarea>
+          <div class="smallNote">Cole o código SVG completo (incluindo a tag &lt;svg&gt;)</div>
+            </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Largura</label>
+              <input type="number" id="insp-svgWidth" value="${p.width || 100}" min="10" max="1000">
+            </div>
+            <div>
+              <label class="smallNote">Altura</label>
+              <input type="number" id="insp-svgHeight" value="${p.height || 100}" min="10" max="1000">
+            </div>
+            </div>
+                </div>
+        <div class="inspector-field">
+          <label class="smallNote">Cor (para SVGs monocromáticos)</label>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="color" id="insp-svgColor" value="${p.color || '#000000'}" style="width: 50px; height: 32px; cursor: pointer;">
+            <input type="text" id="insp-svgColorText" value="${p.color || '#000000'}" placeholder="#000000" style="flex: 1; font-size: 0.875rem;">
+            </div>
+          <div class="smallNote">Aplicável apenas para SVGs que suportam coloração (deixe vazio se o SVG já tiver cores definidas)</div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-svgAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorBarcode(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>Valor do Barcode</label>
+          <input type="text" id="insp-barcodeValue" value="${escapeHtml(p.barcodeValue || 'ABC123456789')}" placeholder="ABC123456789">
+          <div class="smallNote">Digite o valor que será codificado no barcode</div>
+        </div>
+        <div class="inspector-field">
+          <label>Formato</label>
+          <select id="insp-barcodeFormat">
+            <option value="CODE128" ${p.format === 'CODE128' || !p.format ? 'selected' : ''}>CODE128</option>
+            <option value="CODE39" ${p.format === 'CODE39' ? 'selected' : ''}>CODE39</option>
+            <option value="EAN13" ${p.format === 'EAN13' ? 'selected' : ''}>EAN13</option>
+            <option value="EAN8" ${p.format === 'EAN8' ? 'selected' : ''}>EAN8</option>
+            <option value="UPC" ${p.format === 'UPC' ? 'selected' : ''}>UPC</option>
+            <option value="ITF" ${p.format === 'ITF' ? 'selected' : ''}>ITF</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Line Width</label>
+              <input type="number" id="insp-barcodeLineWidth" value="${p.lineWidth || 1.5}" min="0.5" max="5" step="0.1">
+            </div>
+            <div>
+              <label class="smallNote">Height</label>
+              <input type="number" id="insp-barcodeHeight" value="${p.barHeight || 30}" min="10" max="200">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+            <input type="checkbox" id="insp-barcodeDisplayValue" ${p.displayValue !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <span>Display Value</span>
+          </label>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Font Size</label>
+              <input type="number" id="insp-barcodeFontSize" value="${p.fontSize || 10}" min="8" max="20">
+            </div>
+            <div>
+              <label class="smallNote">Margin</label>
+              <input type="number" id="insp-barcodeMargin" value="${p.margin || 0}" min="0" max="20">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label>Fit (Largura x Altura)</label>
+          <div class="row">
+            <div>
+              <input type="number" id="insp-barcodeFitW" value="${p.fit ? p.fit[0] : 201}" min="50" max="500">
+            </div>
+            <div>
+              <input type="number" id="insp-barcodeFitH" value="${p.fit ? p.fit[1] : 42}" min="20" max="200">
+            </div>
+          </div>
+          <div class="smallNote">Tamanho do barcode no PDF (em pixels)</div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-barcodeAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorStamp(element) {
+      const p = element.properties || {};
+      const fit = Array.isArray(p.fit) ? p.fit : [p.fit || 120, p.fit || 120];
+      return `
+        <div class="inspector-field">
+          <label>Tipo de Fonte</label>
+          <select id="insp-stampSourceType">
+            <option value="image" ${p.sourceType === 'image' || !p.sourceType ? 'selected' : ''}>Imagem</option>
+            <option value="svg" ${p.sourceType === 'svg' ? 'selected' : ''}>SVG</option>
+          </select>
+        </div>
+        <div class="inspector-field" id="insp-stampValueField">
+          <label id="insp-stampValueLabel">${p.sourceType === 'svg' ? 'Código SVG' : 'URL ou DataURL'}</label>
+          ${p.sourceType === 'svg' ?
+          `<textarea id="insp-stampValue" rows="6" placeholder="<svg>...</svg>">${escapeHtml(p.value || '')}</textarea>` :
+          `<input type="text" id="insp-stampValue" value="${escapeHtml(p.value || '')}" placeholder="https://exemplo.com/imagem.png ou data:image/...">`
+        }
+          <div class="smallNote">${p.sourceType === 'svg' ? 'Cole o código SVG completo' : 'URL da imagem (http/https) ou dataURL (data:image/...)'}</div>
+        </div>
+        <div class="inspector-field">
+          <label>Fit (Largura x Altura)</label>
+          <div class="row">
+            <div>
+              <input type="number" id="insp-stampFitW" value="${fit[0]}" min="10" max="500">
+            </div>
+            <div>
+              <input type="number" id="insp-stampFitH" value="${fit[1]}" min="10" max="500">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-stampAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Opacidade</label>
+          <input type="number" id="insp-stampOpacity" value="${p.opacity !== undefined ? p.opacity : 1}" min="0" max="1" step="0.1">
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorCheckbox(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>Texto</label>
+          <input type="text" id="insp-choiceText" value="${escapeHtml(p.choiceText || 'Texto...')}" placeholder="Texto...">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Texto que aparece ao lado do ícone</div>
+        </div>
+        <div class="inspector-field">
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+            <input type="checkbox" id="insp-choiceChecked" ${p.choiceChecked === true ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <span>Marcado</span>
+          </label>
+        </div>
+        <div class="inspector-field">
+          <label>Posição do Ícone</label>
+          <select id="insp-choiceIconPosition">
+            <option value="before" ${p.choiceIconPosition === 'before' || !p.choiceIconPosition ? 'selected' : ''}>Antes do texto</option>
+            <option value="after" ${p.choiceIconPosition === 'after' ? 'selected' : ''}>Depois do texto</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tamanho do Ícone</label>
+              <input type="number" id="insp-choiceIconSize" value="${p.choiceIconSize || 12}" min="8" max="30" step="1">
+            </div>
+            <div>
+              <label class="smallNote">Gap (distância)</label>
+              <input type="number" id="insp-choiceGap" value="${p.choiceGap || 8}" min="0" max="30" step="1">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-choiceAlignment">
+            <option value="left" ${p.alignment === 'left' || !p.alignment ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorRadio(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label>Texto</label>
+          <input type="text" id="insp-choiceText" value="${escapeHtml(p.choiceText || 'Texto...')}" placeholder="Texto...">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Texto que aparece ao lado do ícone</div>
+        </div>
+        <div class="inspector-field">
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+            <input type="checkbox" id="insp-choiceChecked" ${p.choiceChecked === true ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            <span>Marcado</span>
+          </label>
+        </div>
+        <div class="inspector-field">
+          <label>Posição do Ícone</label>
+          <select id="insp-choiceIconPosition">
+            <option value="before" ${p.choiceIconPosition === 'before' || !p.choiceIconPosition ? 'selected' : ''}>Antes do texto</option>
+            <option value="after" ${p.choiceIconPosition === 'after' ? 'selected' : ''}>Depois do texto</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tamanho do Ícone</label>
+              <input type="number" id="insp-choiceIconSize" value="${p.choiceIconSize || 12}" min="8" max="30" step="1">
+            </div>
+            <div>
+              <label class="smallNote">Gap (distância)</label>
+              <input type="number" id="insp-choiceGap" value="${p.choiceGap || 8}" min="0" max="30" step="1">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-choiceAlignment">
+            <option value="left" ${p.alignment === 'left' || !p.alignment ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorFillLine(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label class="smallNote">Largura da Linha</label>
+          <input type="number" id="insp-fillLineWidth" value="${p.lineWidth || 200}" min="50" max="800" step="10">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Espessura</label>
+          <input type="number" id="insp-fillLineThickness" value="${p.thickness || 0.8}" min="0.5" max="5" step="0.1">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Cor</label>
+          <input type="color" id="insp-fillLineColor" value="${p.color || '#000000'}">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-fillLineAlignment">
+            <option value="left" ${p.alignment === 'left' || !p.alignment ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorChart(element) {
+      const p = element.properties || {};
+      const fit = Array.isArray(p.chartFit) ? p.chartFit : [p.chartFit || 400, p.chartFit || 200];
+      return `
+        <div class="inspector-field">
+          <label>Tipo de Gráfico</label>
+          <select id="insp-chartType">
+            <option value="bar" ${p.chartType === 'bar' || !p.chartType ? 'selected' : ''}>Barra</option>
+            <option value="line" ${p.chartType === 'line' ? 'selected' : ''}>Linha</option>
+            <option value="pie" ${p.chartType === 'pie' ? 'selected' : ''}>Pizza</option>
+            <option value="doughnut" ${p.chartType === 'doughnut' ? 'selected' : ''}>Rosca</option>
+            <option value="radar" ${p.chartType === 'radar' ? 'selected' : ''}>Radar</option>
+            <option value="polarArea" ${p.chartType === 'polarArea' ? 'selected' : ''}>Área Polar</option>
+            <option value="scatter" ${p.chartType === 'scatter' ? 'selected' : ''}>Dispersão</option>
+            <option value="bubble" ${p.chartType === 'bubble' ? 'selected' : ''}>Bolha</option>
+            <option value="mixed" ${p.chartType === 'mixed' ? 'selected' : ''}>Misto</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label>Tamanho do Gráfico</label>
+          <div class="row">
+            <div>
+              <label class="smallNote">Largura</label>
+              <input type="number" id="insp-chartWidth" value="${p.chartWidth || 400}" min="200" max="800" step="10">
+            </div>
+            <div>
+              <label class="smallNote">Altura</label>
+              <input type="number" id="insp-chartHeight" value="${p.chartHeight || 200}" min="100" max="600" step="10">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label>Fit (Largura x Altura)</label>
+          <div class="row">
+            <div>
+              <input type="number" id="insp-chartFitW" value="${fit[0]}" min="100" max="800" step="10">
+            </div>
+            <div>
+              <input type="number" id="insp-chartFitH" value="${fit[1]}" min="50" max="600" step="10">
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Cor de Fundo</label>
+          <input type="color" id="insp-chartBackgroundColor" value="${p.chartBackgroundColor || '#FFFFFF'}">
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Device Pixel Ratio</label>
+          <input type="number" id="insp-chartDevicePixelRatio" value="${p.chartDevicePixelRatio || 2}" min="1" max="4" step="1">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Valor maior = melhor qualidade (2 é recomendado)</div>
+        </div>
+        <div class="inspector-field">
+          <label>Dados do Gráfico (JSON)</label>
+          <textarea id="insp-chartData" rows="8" placeholder='{"labels": ["Jan", "Feb"], "datasets": [...]}'>${escapeHtml(JSON.stringify(p.chartData || { labels: [], datasets: [] }, null, 2))}</textarea>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Formato JSON do Chart.js. Deve conter "labels" e "datasets"</div>
+        </div>
+        <div class="inspector-field">
+          <label>Opções do Gráfico (JSON)</label>
+          <textarea id="insp-chartOptions" rows="8" placeholder='{"responsive": false, "animation": {"duration": 0}, ...}'>${escapeHtml(JSON.stringify(p.chartOptions || { responsive: false, animation: { duration: 0 } }, null, 2))}</textarea>
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Formato JSON do Chart.js. animation.duration deve ser 0 para export correto</div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-chartAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' || !p.alignment ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+          </select>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    function renderInspectorGroup(element) {
+      const p = element.properties || {};
+      return `
+        <div class="inspector-field">
+          <label class="smallNote">Orientaçao</label>
+          <select id="insp-groupOrientation">
+            <option value="column" ${p.orientation === 'column' ? 'selected' : ''}>Coluna (vertical)</option>
+            <option value="row" ${p.orientation === 'row' ? 'selected' : ''}>Linha (horizontal)</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Alinhamento</label>
+          <select id="insp-groupAlignment">
+            <option value="left" ${p.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+            <option value="center" ${p.alignment === 'center' ? 'selected' : ''}>Centro</option>
+            <option value="right" ${p.alignment === 'right' ? 'selected' : ''}>Direita</option>
+            <option value="justify" ${p.alignment === 'justify' ? 'selected' : ''}>Justificado</option>
+          </select>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Espaçamento entre elementos (gap)</label>
+          <input type="number" id="insp-groupGap" value="${p.gap || 10}" min="0" max="50">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Espaço entre os elementos dentro do grupo</div>
+        </div>
+        <div class="inspector-field">
+          <div class="smallNote" style="margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-tertiary);">Elementos no grupo: ${p.children?.length || 0}</div>
+        </div>
+        ${renderMarginSection(element)}
+      `;
+    }
+
+    // Variáveis para debounce e preservação de foco
+    let renderTimeout = null;
+    let focusedElementId = null;
+    let focusedElementValue = null;
+    let focusedElementSelectionStart = null;
+    let focusedElementSelectionEnd = null;
+
+    function attachInspectorListeners(element) {
+      const p = element.properties || {};
+      const parentGroupInfo = findParentGroup(element.id);
+
+      // Listeners genéricos para margens (aplicável a todos os elementos)
+      const marginInputs = document.querySelectorAll('.margin-input');
+      marginInputs.forEach(input => {
+        input.addEventListener('input', () => {
+          const side = parseInt(input.dataset.side || 0);
+          if (!p.margin) p.margin = [0, 0, 0, 0];
+          p.margin[side] = parseInt(input.value || 0) || 0;
+          // Se todas as margens são 0, remover a propriedade
+          if (p.margin.every(m => m === 0)) {
+            delete p.margin;
+          }
+          updateWithoutLosingFocus(() => {
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+          }, 300);
+        });
+      });
+
+      // Função helper para atualizar sem perder foco
+      function updateWithoutLosingFocus(updateFn, delay = 300) {
+        // Ativar modo de edição para evitar ajuste de tamanho durante edições
+        isEditingMode = true;
+
+        // Salvar estado do elemento focado
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+          focusedElementId = activeElement.id;
+          // IMPORTANTE: Para inputs number, salvar o valor como string para preservar digitação parcial
+          focusedElementValue = activeElement.value;
+          // Para inputs number, selectionStart/End podem ser null, usar 0 como fallback
+          focusedElementSelectionStart = activeElement.selectionStart !== null ? activeElement.selectionStart : activeElement.value.length;
+          focusedElementSelectionEnd = activeElement.selectionEnd !== null ? activeElement.selectionEnd : activeElement.value.length;
+        }
+
+        // Limpar timeout anterior
+        if (renderTimeout) {
+          clearTimeout(renderTimeout);
+        }
+
+        // Executar atualização após delay
+        renderTimeout = setTimeout(() => {
+          updateFn();
+
+          // Desativar modo de edição após um pequeno delay para permitir que o DOM se estabilize
+          setTimeout(() => {
+            isEditingMode = false;
+          }, 200);
+
+          // Restaurar foco após renderização
+          setTimeout(() => {
+            if (focusedElementId) {
+              const element = document.getElementById(focusedElementId);
+              if (element) {
+                // IMPORTANTE: Para inputs number, restaurar o valor ANTES de focar
+                if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+                  // Restaurar o valor exato que estava sendo digitado (pode incluir digitação parcial)
+                  element.value = focusedElementValue;
+
+                  // Focar o elemento
+                  element.focus();
+
+                  // Restaurar posição do cursor após um pequeno delay para garantir que o valor foi aplicado
+                  setTimeout(() => {
+                    if (element.setSelectionRange && focusedElementSelectionStart !== undefined && focusedElementSelectionStart !== null) {
+                      const len = element.value.length;
+                      const start = Math.min(Math.max(0, focusedElementSelectionStart), len);
+                      const end = Math.min(Math.max(0, focusedElementSelectionEnd !== undefined && focusedElementSelectionEnd !== null ? focusedElementSelectionEnd : focusedElementSelectionStart), len);
+
+                      // IMPORTANTE: Para inputs number, tentar restaurar a posição do cursor
+                      try {
+                        element.setSelectionRange(start, end);
+                      } catch (e) {
+                        // Alguns navegadores podem não suportar setSelectionRange em inputs number
+                        // Nesse caso, tentar posicionar o cursor no final
+                        try {
+                          element.setSelectionRange(len, len);
+                        } catch (e2) {
+                          // Se ainda falhar, apenas manter o foco
+                        }
+                      }
+                    } else {
+                      // Se não houver seleção salva, posicionar no final
+                      try {
+                        const len = element.value.length;
+                        element.setSelectionRange(len, len);
+                      } catch (e) {
+                        // Ignorar erro
+                      }
+                    }
+                  }, 5);
+                } else {
+                  element.focus();
+                }
+              }
+            }
+          }, 50); // Aumentar delay para garantir que o DOM foi completamente atualizado
+        }, delay);
+      }
+
+      // Handle width field if element is in a horizontal group
+      if (parentGroupInfo && parentGroupInfo.group.properties && parentGroupInfo.group.properties.orientation === 'row') {
+        const widthInput = document.getElementById('insp-width');
+        if (widthInput && typeof redistributeGroupWidths === 'function') {
+          widthInput.addEventListener('input', () => {
+            // IMPORTANTE: Não processar o valor imediatamente para inputs number
+            // Deixar o valor como string durante a digitação para preservar posição do cursor
+            const rawValue = widthInput.value;
+            // Apenas atualizar se o valor for válido (não vazio e numérico)
+            if (rawValue !== '' && !isNaN(rawValue)) {
+              const newWidth = parseFloat(rawValue) || 0;
+              redistributeGroupWidths(parentGroupInfo.group, element.id, newWidth);
+            }
+            updateWithoutLosingFocus(() => {
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') {
+                renderAll(false);
+              } else if (typeof render === 'function') {
+                render();
+              }
+              // Re-renderizar o inspector para atualizar os valores dos outros elementos
+              setTimeout(() => {
+                if (typeof renderInspector === 'function') renderInspector();
+              }, 0);
+            }, 300);
+          });
+        }
+      }
+
+
+      // Handle height field if element is in a group
+      if (parentGroupInfo) {
+        const heightInput = document.getElementById('insp-height');
+        if (heightInput) {
+          heightInput.addEventListener('input', () => {
+            // IMPORTANTE: Não processar o valor imediatamente para inputs number
+            // Deixar o valor como string durante a digitação para preservar posição do cursor
+            const rawValue = heightInput.value;
+            // Apenas atualizar se o valor for válido (não vazio e numérico)
+            if (rawValue !== '' && !isNaN(rawValue)) {
+              element.h = parseInt(rawValue) || 100;
+            }
+            if (typeof updateGroupDimensions === 'function') {
+              updateGroupDimensions(parentGroupInfo.group);
+            }
+            updateWithoutLosingFocus(() => {
+              if (typeof renderAll === 'function') {
+                renderAll();
+              } else if (typeof render === 'function') {
+                render();
+              }
+            }, 300);
+          });
+        }
+      }
+
+      // Adicionar listener para verticalAlignment de célula de tabela
+      const cellVerticalAlignmentSelect = document.getElementById('insp-cellVerticalAlignment');
+      if (cellVerticalAlignmentSelect) {
+        const nodeWithParent = findNodeWithParent(element.id);
+        if (nodeWithParent && nodeWithParent.parent && nodeWithParent.ctx && nodeWithParent.ctx.kind === 'tableCell') {
+          const ctx = nodeWithParent.ctx;
+          const table = nodeWithParent.parent;
+          const cell = table.properties.body[ctx.row][ctx.col];
+
+          cellVerticalAlignmentSelect.addEventListener('change', () => {
+            cell.verticalAlignment = cellVerticalAlignmentSelect.value;
+            updateWithoutLosingFocus(() => {
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            }, 300);
+          });
+        }
+      }
+
+      switch (element.type) {
+        case 'text':
+          const elementIdInput = document.getElementById('insp-elementId');
+          const textInput = document.getElementById('insp-text');
+          const textLinkInput = document.getElementById('insp-link');
+          const fontSizeInput = document.getElementById('insp-fontSize');
+
+          if (elementIdInput) {
+            elementIdInput.addEventListener('input', () => {
+              const idValue = elementIdInput.value.trim();
+              if (idValue) {
+                p.id = idValue;
+              } else {
+                delete p.id;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          const fontSelect = document.getElementById('insp-font');
+          const fontFeaturesInput = document.getElementById('insp-fontFeatures');
+          const alignmentSelect = document.getElementById('insp-alignment');
+          const decorationSelect = document.getElementById('insp-decoration');
+          const colorInput = document.getElementById('insp-color');
+          const colorTextInput = document.getElementById('insp-colorText');
+          const backgroundInput = document.getElementById('insp-background');
+          const backgroundTextInput = document.getElementById('insp-backgroundText');
+          const boldCheck = document.getElementById('insp-bold');
+          const italicsCheck = document.getElementById('insp-italics');
+          const lineHeightInput = document.getElementById('insp-lineHeight');
+          const characterSpacingInput = document.getElementById('insp-characterSpacing');
+          const decorationStyleSelect = document.getElementById('insp-decorationStyle');
+          const decorationColorInput = document.getElementById('insp-decorationColor');
+          const decorationColorTextInput = document.getElementById('insp-decorationColorText');
+          const decorationOptions = document.getElementById('decorationOptions');
+
+          if (textInput) {
+            textInput.addEventListener('input', () => {
+              p.text = textInput.value;
+              updateParentGroupsDimensions(element.id);
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          // Handle link type selector
+          const linkTypeSelect = document.getElementById('insp-linkType');
+          const linkUrlOptions = document.getElementById('insp-linkUrlOptions');
+          const linkPageOptions = document.getElementById('insp-linkPageOptions');
+          const linkDestinationOptions = document.getElementById('insp-linkDestinationOptions');
+
+          if (linkTypeSelect) {
+            linkTypeSelect.addEventListener('change', () => {
+              const linkType = linkTypeSelect.value;
+
+              // Preservar o tipo escolhido mesmo quando não há valor ainda
+              p._linkType = linkType;
+
+              // Show/hide options
+              if (linkUrlOptions) linkUrlOptions.style.display = linkType === 'url' ? '' : 'none';
+              if (linkPageOptions) linkPageOptions.style.display = linkType === 'page' ? '' : 'none';
+              if (linkDestinationOptions) linkDestinationOptions.style.display = linkType === 'destination' ? '' : 'none';
+
+              // Apenas limpar propriedades se mudou para 'none', caso contrário manter valores existentes
+              if (linkType === 'none') {
+                delete p.link;
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                delete p._linkType;
+              } else if (linkType === 'url') {
+                // Se mudou para URL, limpar outros tipos mas manter URL se existir
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                // Não limpar p.link - deixar o usuário preencher ou manter se já existe
+              } else if (linkType === 'page') {
+                // Se mudou para página, limpar outros tipos mas manter linkToPage se existir
+                delete p.link;
+                delete p.linkToDestination;
+                if (!p.linkToPage && linkToPageInput) {
+                  // Se não tinha página, definir padrão 1
+                  p.linkToPage = 1;
+                  if (linkToPageInput) linkToPageInput.value = 1;
+                }
+              } else if (linkType === 'destination') {
+                // Se mudou para destino, limpar outros tipos mas manter linkToDestination se existir
+                delete p.link;
+                delete p.linkToPage;
+                // Não limpar p.linkToDestination - deixar o usuário preencher ou manter se já existe
+              }
+
+              // Não re-renderizar o inspector para não perder a seleção do dropdown
+              // Apenas atualizar a renderização do canvas se necessário
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+
+          if (textLinkInput) {
+            textLinkInput.addEventListener('input', () => {
+              const urlValue = textLinkInput.value.trim();
+              if (urlValue) {
+                p.link = urlValue;
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                p._linkType = 'url'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'url') {
+                  delete p.link;
+                } else {
+                  delete p.link;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          const linkToPageInput = document.getElementById('insp-linkToPage');
+          if (linkToPageInput) {
+            linkToPageInput.addEventListener('input', () => {
+              const pageNum = parseInt(linkToPageInput.value);
+              if (pageNum > 0) {
+                p.linkToPage = pageNum;
+                delete p.link;
+                delete p.linkToDestination;
+                p._linkType = 'page'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'page') {
+                  delete p.linkToPage;
+                } else {
+                  delete p.linkToPage;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          const linkToDestinationInput = document.getElementById('insp-linkToDestination');
+          if (linkToDestinationInput) {
+            linkToDestinationInput.addEventListener('input', () => {
+              const dest = linkToDestinationInput.value.trim();
+              if (dest) {
+                p.linkToDestination = dest;
+                delete p.link;
+                delete p.linkToPage;
+                p._linkType = 'destination'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'destination') {
+                  delete p.linkToDestination;
+                } else {
+                  delete p.linkToDestination;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (fontSizeInput) {
+            const fontSizeError = document.getElementById('insp-fontSizeError');
+
+            fontSizeInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              // Deixar o valor como string durante a digitação para preservar posição do cursor
+              const rawValue = fontSizeInput.value;
+
+              // Validar range
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                const fontSize = parseInt(rawValue);
+                if (fontSize < 8 || fontSize > 72) {
+                  if (fontSizeError) {
+                    fontSizeError.textContent = `⚠️ Tamanho da fonte deve estar entre 8 e 72 (valor atual: ${fontSize})`;
+                    fontSizeError.style.display = 'block';
+                  }
+                } else {
+                  if (fontSizeError) {
+                    fontSizeError.style.display = 'none';
+                  }
+                  p.fontSize = fontSize;
+                }
+              } else if (rawValue === '') {
+                if (fontSizeError) {
+                  fontSizeError.style.display = 'none';
+                }
+              }
+
+              updateParentGroupsDimensions(element.id);
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (fontSelect) {
+            fontSelect.addEventListener('change', () => {
+              isEditingMode = true;
+              p.font = fontSelect.value || null;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              setTimeout(() => { isEditingMode = false; }, 200);
+            });
+          }
+          if (fontFeaturesInput) {
+            fontFeaturesInput.addEventListener('input', () => {
+              const val = fontFeaturesInput.value.trim();
+              p.fontFeatures = val ? val.split(',').map(f => f.trim()).filter(Boolean) : undefined;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (alignmentSelect) alignmentSelect.addEventListener('change', () => {
+            isEditingMode = true;
+            p.alignment = alignmentSelect.value;
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            setTimeout(() => { isEditingMode = false; }, 200);
+          });
+          if (decorationSelect) {
+            decorationSelect.addEventListener('change', () => {
+              isEditingMode = true;
+              p.decoration = decorationSelect.value || null;
+              if (decorationOptions) decorationOptions.style.display = p.decoration ? '' : 'none';
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              setTimeout(() => { isEditingMode = false; }, 200);
+            });
+          }
+          if (decorationStyleSelect) {
+            decorationStyleSelect.addEventListener('change', () => {
+              isEditingMode = true;
+              p.decorationStyle = decorationStyleSelect.value || null;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              setTimeout(() => { isEditingMode = false; }, 200);
+            });
+          }
+          if (decorationColorInput && decorationColorTextInput) {
+            decorationColorInput.addEventListener('input', () => {
+              decorationColorTextInput.value = decorationColorInput.value;
+              p.decorationColor = decorationColorInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            decorationColorTextInput.addEventListener('input', () => {
+              if (!decorationColorTextInput.value.trim()) {
+                p.decorationColor = null;
+              } else if (/^#[0-9A-F]{6}$/i.test(decorationColorTextInput.value)) {
+                decorationColorInput.value = decorationColorTextInput.value;
+                p.decorationColor = decorationColorTextInput.value;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (colorInput && colorTextInput) {
+            colorInput.addEventListener('input', () => {
+              colorTextInput.value = colorInput.value;
+              p.color = colorInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            colorTextInput.addEventListener('input', () => {
+              if (/^#[0-9A-F]{6}$/i.test(colorTextInput.value)) {
+                colorInput.value = colorTextInput.value;
+                p.color = colorTextInput.value;
+                updateWithoutLosingFocus(() => {
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+                }, 300);
+              }
+            });
+          }
+          if (backgroundInput && backgroundTextInput) {
+            backgroundInput.addEventListener('input', () => {
+              backgroundTextInput.value = backgroundInput.value;
+              p.background = backgroundInput.value || null;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            backgroundTextInput.addEventListener('input', () => {
+              if (!backgroundTextInput.value.trim()) {
+                p.background = null;
+              } else if (/^#[0-9A-F]{6}$/i.test(backgroundTextInput.value)) {
+                backgroundInput.value = backgroundTextInput.value;
+                p.background = backgroundTextInput.value;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (boldCheck) boldCheck.addEventListener('change', () => {
+            p.bold = boldCheck.checked;
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+          });
+          if (italicsCheck) italicsCheck.addEventListener('change', () => {
+            p.italics = italicsCheck.checked;
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+          });
+          if (lineHeightInput) {
+            lineHeightInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const val = lineHeightInput.value.trim();
+              if (val !== '' && !isNaN(val)) {
+                p.lineHeight = parseFloat(val);
+              } else if (val === '') {
+                p.lineHeight = undefined;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (characterSpacingInput) {
+            characterSpacingInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const val = characterSpacingInput.value.trim();
+              if (val !== '' && !isNaN(val)) {
+                p.characterSpacing = parseFloat(val);
+              } else if (val === '') {
+                p.characterSpacing = undefined;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+
+        case 'header':
+          const headerElementIdInput = document.getElementById('insp-headerElementId');
+          const headerTextInput = document.getElementById('insp-headerText');
+          const headerLinkInput = document.getElementById('insp-headerLink');
+          const headerFontSizeInput = document.getElementById('insp-headerFontSize');
+
+          if (headerElementIdInput) {
+            headerElementIdInput.addEventListener('input', () => {
+              const idValue = headerElementIdInput.value.trim();
+              if (idValue) {
+                p.id = idValue;
+              } else {
+                delete p.id;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          const headerFontSelect = document.getElementById('insp-headerFont');
+          const headerFontFeaturesInput = document.getElementById('insp-headerFontFeatures');
+          const headerAlignmentSelect = document.getElementById('insp-headerAlignment');
+          const headerDecorationSelect = document.getElementById('insp-headerDecoration');
+          const headerColorInput = document.getElementById('insp-headerColor');
+          const headerColorTextInput = document.getElementById('insp-headerColorText');
+          const headerBackgroundInput = document.getElementById('insp-headerBackground');
+          const headerBackgroundTextInput = document.getElementById('insp-headerBackgroundText');
+          const headerBoldCheck = document.getElementById('insp-headerBold');
+          const headerItalicsCheck = document.getElementById('insp-headerItalics');
+          const headerLineHeightInput = document.getElementById('insp-headerLineHeight');
+          const headerCharacterSpacingInput = document.getElementById('insp-headerCharacterSpacing');
+          const headerDecorationStyleSelect = document.getElementById('insp-headerDecorationStyle');
+          const headerDecorationColorInput = document.getElementById('insp-headerDecorationColor');
+          const headerDecorationColorTextInput = document.getElementById('insp-headerDecorationColorText');
+          const headerDecorationOptions = document.getElementById('headerDecorationOptions');
+
+          if (headerTextInput) {
+            headerTextInput.addEventListener('input', () => {
+              p.text = headerTextInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          // Handle header link type selector
+          const headerLinkTypeSelect = document.getElementById('insp-headerLinkType');
+          const headerLinkUrlOptions = document.getElementById('insp-headerLinkUrlOptions');
+          const headerLinkPageOptions = document.getElementById('insp-headerLinkPageOptions');
+          const headerLinkDestinationOptions = document.getElementById('insp-headerLinkDestinationOptions');
+
+          if (headerLinkTypeSelect) {
+            headerLinkTypeSelect.addEventListener('change', () => {
+              const linkType = headerLinkTypeSelect.value;
+
+              // Preservar o tipo escolhido mesmo quando não há valor ainda
+              p._linkType = linkType;
+
+              // Show/hide options
+              if (headerLinkUrlOptions) headerLinkUrlOptions.style.display = linkType === 'url' ? '' : 'none';
+              if (headerLinkPageOptions) headerLinkPageOptions.style.display = linkType === 'page' ? '' : 'none';
+              if (headerLinkDestinationOptions) headerLinkDestinationOptions.style.display = linkType === 'destination' ? '' : 'none';
+
+              // Apenas limpar propriedades se mudou para 'none', caso contrário manter valores existentes
+              if (linkType === 'none') {
+                delete p.link;
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                delete p._linkType;
+              } else if (linkType === 'url') {
+                // Se mudou para URL, limpar outros tipos mas manter URL se existir
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                // Não limpar p.link - deixar o usuário preencher ou manter se já existe
+              } else if (linkType === 'page') {
+                // Se mudou para página, limpar outros tipos mas manter linkToPage se existir
+                delete p.link;
+                delete p.linkToDestination;
+                if (!p.linkToPage && headerLinkToPageInput) {
+                  // Se não tinha página, definir padrão 1
+                  p.linkToPage = 1;
+                  if (headerLinkToPageInput) headerLinkToPageInput.value = 1;
+                }
+              } else if (linkType === 'destination') {
+                // Se mudou para destino, limpar outros tipos mas manter linkToDestination se existir
+                delete p.link;
+                delete p.linkToPage;
+                // Não limpar p.linkToDestination - deixar o usuário preencher ou manter se já existe
+              }
+
+              // Não re-renderizar o inspector para não perder a seleção do dropdown
+              // Apenas atualizar a renderização do canvas se necessário
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+
+          if (headerLinkInput) {
+            headerLinkInput.addEventListener('input', () => {
+              const urlValue = headerLinkInput.value.trim();
+              if (urlValue) {
+                p.link = urlValue;
+                delete p.linkToPage;
+                delete p.linkToDestination;
+                p._linkType = 'url'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'url') {
+                  delete p.link;
+                } else {
+                  delete p.link;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          const headerLinkToPageInput = document.getElementById('insp-headerLinkToPage');
+          if (headerLinkToPageInput) {
+            headerLinkToPageInput.addEventListener('input', () => {
+              const pageNum = parseInt(headerLinkToPageInput.value);
+              if (pageNum > 0) {
+                p.linkToPage = pageNum;
+                delete p.link;
+                delete p.linkToDestination;
+                p._linkType = 'page'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'page') {
+                  delete p.linkToPage;
+                } else {
+                  delete p.linkToPage;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          const headerLinkToDestinationInput = document.getElementById('insp-headerLinkToDestination');
+          if (headerLinkToDestinationInput) {
+            headerLinkToDestinationInput.addEventListener('input', () => {
+              const dest = headerLinkToDestinationInput.value.trim();
+              if (dest) {
+                p.linkToDestination = dest;
+                delete p.link;
+                delete p.linkToPage;
+                p._linkType = 'destination'; // Preservar tipo escolhido
+              } else {
+                // Se limpou o campo, verificar se deve manter o tipo ou limpar tudo
+                if (p._linkType === 'destination') {
+                  delete p.linkToDestination;
+                } else {
+                  delete p.linkToDestination;
+                  delete p._linkType;
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (headerFontSizeInput) {
+            headerFontSizeInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = headerFontSizeInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.fontSize = parseInt(rawValue);
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (headerFontSelect) {
+            headerFontSelect.addEventListener('change', () => {
+              p.font = headerFontSelect.value || null;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          if (headerFontFeaturesInput) {
+            headerFontFeaturesInput.addEventListener('input', () => {
+              const val = headerFontFeaturesInput.value.trim();
+              p.fontFeatures = val ? val.split(',').map(f => f.trim()).filter(Boolean) : undefined;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (headerAlignmentSelect) headerAlignmentSelect.addEventListener('change', () => {
+            p.alignment = headerAlignmentSelect.value;
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+          });
+          if (headerDecorationSelect) {
+            headerDecorationSelect.addEventListener('change', () => {
+              p.decoration = headerDecorationSelect.value || null;
+              if (headerDecorationOptions) headerDecorationOptions.style.display = p.decoration ? '' : 'none';
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          if (headerDecorationStyleSelect) {
+            headerDecorationStyleSelect.addEventListener('change', () => {
+              p.decorationStyle = headerDecorationStyleSelect.value || null;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          if (headerDecorationColorInput && headerDecorationColorTextInput) {
+            headerDecorationColorInput.addEventListener('input', () => {
+              headerDecorationColorTextInput.value = headerDecorationColorInput.value;
+              p.decorationColor = headerDecorationColorInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            headerDecorationColorTextInput.addEventListener('input', () => {
+              if (!headerDecorationColorTextInput.value.trim()) {
+                p.decorationColor = null;
+              } else if (/^#[0-9A-F]{6}$/i.test(headerDecorationColorTextInput.value)) {
+                headerDecorationColorInput.value = headerDecorationColorTextInput.value;
+                p.decorationColor = headerDecorationColorTextInput.value;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (headerColorInput && headerColorTextInput) {
+            headerColorInput.addEventListener('input', () => {
+              headerColorTextInput.value = headerColorInput.value;
+              p.color = headerColorInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            headerColorTextInput.addEventListener('input', () => {
+              if (/^#[0-9A-F]{6}$/i.test(headerColorTextInput.value)) {
+                headerColorInput.value = headerColorTextInput.value;
+                p.color = headerColorTextInput.value;
+                updateWithoutLosingFocus(() => {
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+                }, 300);
+              }
+            });
+          }
+          if (headerBackgroundInput && headerBackgroundTextInput) {
+            headerBackgroundInput.addEventListener('input', () => {
+              headerBackgroundTextInput.value = headerBackgroundInput.value;
+              p.background = headerBackgroundInput.value || null;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            headerBackgroundTextInput.addEventListener('input', () => {
+              if (!headerBackgroundTextInput.value.trim()) {
+                p.background = null;
+              } else if (/^#[0-9A-F]{6}$/i.test(headerBackgroundTextInput.value)) {
+                headerBackgroundInput.value = headerBackgroundTextInput.value;
+                p.background = headerBackgroundTextInput.value;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (headerBoldCheck) headerBoldCheck.addEventListener('change', () => {
+            p.bold = headerBoldCheck.checked;
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+          });
+          if (headerItalicsCheck) headerItalicsCheck.addEventListener('change', () => {
+            p.italics = headerItalicsCheck.checked;
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+          });
+          if (headerLineHeightInput) {
+            headerLineHeightInput.addEventListener('input', () => {
+              const val = headerLineHeightInput.value.trim();
+              p.lineHeight = val ? parseFloat(val) : undefined;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (headerCharacterSpacingInput) {
+            headerCharacterSpacingInput.addEventListener('input', () => {
+              const val = headerCharacterSpacingInput.value.trim();
+              p.characterSpacing = val ? parseFloat(val) : undefined;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+
+        case 'columns':
+          const colCountInput = document.getElementById('insp-colCount');
+          const colGapInput = document.getElementById('insp-colGap');
+          const colValignSelect = document.getElementById('insp-colValign');
+          const colTextsInput = document.getElementById('insp-colTexts');
+
+          // Listeners para larguras das colunas
+          document.querySelectorAll('.col-width-type').forEach(select => {
+            select.addEventListener('change', () => {
+              const colIndex = parseInt(select.dataset.colIndex || 0);
+              const widthType = select.value;
+              const valueInput = document.querySelector(`.col-width-value[data-col-index="${colIndex}"]`);
+              const valueContainer = document.getElementById(`col-width-value-${colIndex}`);
+
+              if (!p.columns || !p.columns[colIndex]) return;
+
+              if (widthType === 'auto') {
+                p.columns[colIndex].width = '*';
+                if (valueContainer) valueContainer.style.display = 'none';
+              } else {
+                if (valueContainer) valueContainer.style.display = '';
+                const currentValue = valueInput ? parseFloat(valueInput.value) || 0 : 0;
+                if (widthType === 'pixels') {
+                  p.columns[colIndex].width = currentValue || 100;
+                } else if (widthType === 'percentage') {
+                  p.columns[colIndex].width = currentValue ? `${currentValue}%` : '50%';
+                }
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          document.querySelectorAll('.col-width-value').forEach(input => {
+            input.addEventListener('input', () => {
+              const colIndex = parseInt(input.dataset.colIndex || 0);
+              const typeSelect = document.querySelector(`.col-width-type[data-col-index="${colIndex}"]`);
+              const widthType = typeSelect ? typeSelect.value : 'auto';
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = input.value;
+              const value = (rawValue !== '' && !isNaN(rawValue)) ? parseFloat(rawValue) : 0;
+
+              if (!p.columns || !p.columns[colIndex]) return;
+
+              if (widthType === 'pixels') {
+                p.columns[colIndex].width = value || 100;
+              } else if (widthType === 'percentage') {
+                p.columns[colIndex].width = value ? `${value}%` : '50%';
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          // Listener para deletar coluna
+          document.querySelectorAll('.btn-delete-col').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const colIndex = parseInt(btn.dataset.colIndex || 0);
+              if (colIndex > 0 && p.columns && p.columns.length > 1) {
+                if (typeof showConfirmModal === 'function') {
+                  showConfirmModal(
+                    'Deletar Coluna',
+                    `Tem certeza que deseja deletar a Coluna ${colIndex + 1}?`,
+                    () => {
+                      p.columns.splice(colIndex, 1);
+                      if (colCountInput) colCountInput.value = p.columns.length;
+                      if (typeof renderAll === 'function') {
+                        renderAll();
+                      } else if (typeof render === 'function') {
+                        render();
+                      }
+                      setTimeout(() => {
+                        if (typeof renderInspector === 'function') renderInspector();
+                      }, 0);
+                    }
+                  );
+                }
+              }
+            });
+          });
+
+          if (colCountInput) {
+            colCountInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = colCountInput.value;
+              const count = (rawValue !== '' && !isNaN(rawValue)) ? parseInt(rawValue) : 2;
+              const current = p.columns || [];
+              while (current.length < count) {
+                current.push({ text: `Coluna ${current.length + 1}`, width: '*', children: [] });
+              }
+              while (current.length > count) {
+                current.pop();
+              }
+              p.columns = current;
+              if (typeof renderAll === 'function') {
+                renderAll();
+              } else if (typeof render === 'function') {
+                render();
+              }
+              // Atualizar inspector para mostrar as novas colunas
+              setTimeout(() => {
+                if (typeof renderInspector === 'function') renderInspector();
+              }, 0);
+            });
+          }
+
+          if (colGapInput) {
+            colGapInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = colGapInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.gap = parseInt(rawValue) || 10;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (colValignSelect) {
+            colValignSelect.addEventListener('change', () => {
+              p.valign = colValignSelect.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (colTextsInput) {
+            colTextsInput.addEventListener('input', () => {
+              const parts = colTextsInput.value.split('\n---\n');
+              // Preservar children e width existentes ao atualizar textos
+              p.columns = parts.map((t, i) => {
+                const existingCol = p.columns && p.columns[i];
+                return {
+                  text: t.trim() || `Coluna ${i + 1}`,
+                  width: existingCol?.width || '*',
+                  children: existingCol?.children || []
+                };
+              });
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+
+        case 'list':
+          const listKindSelect = document.getElementById('insp-listKind');
+          const listItemsInput = document.getElementById('insp-listItems');
+          const listStartInput = document.getElementById('insp-listStart');
+          const listTypeSelect = document.getElementById('insp-listType');
+          const listReversedCheck = document.getElementById('insp-listReversed');
+          const markerColorInput = document.getElementById('insp-markerColor');
+          const markerColorTextInput = document.getElementById('insp-markerColorText');
+
+          if (listKindSelect) {
+            listKindSelect.addEventListener('change', () => {
+              p.ordered = listKindSelect.value === 'ol';
+              p.listType = listKindSelect.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (listStartInput) {
+            listStartInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = listStartInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.start = parseInt(rawValue) || 1;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (listTypeSelect) {
+            listTypeSelect.addEventListener('change', () => {
+              p.type = listTypeSelect.value;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          if (listReversedCheck) {
+            listReversedCheck.addEventListener('change', () => {
+              p.reversed = listReversedCheck.checked;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          if (listItemsInput) {
+            listItemsInput.addEventListener('input', () => {
+              // Converter strings para objetos {kind: 'text', text: '...'}
+              const lines = listItemsInput.value.split('\n').filter(Boolean);
+              p.items = lines.map(line => ({ kind: 'text', text: line }));
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+
+        case 'table':
+          const tableColsInput = document.getElementById('insp-tableCols');
+          const tableRowsInput = document.getElementById('insp-tableRows');
+          const tableHeaderRowsInput = document.getElementById('insp-tableHeaderRows');
+          const tableLayoutSelect = document.getElementById('insp-tableLayout');
+
+          if (tableHeaderRowsInput) {
+            tableHeaderRowsInput.addEventListener('input', () => {
+              const headerRows = parseInt(tableHeaderRowsInput.value) || 1;
+              const numRows = (p.body || []).length;
+              if (headerRows >= 0 && headerRows <= numRows) {
+                p.headerRows = headerRows;
+              } else {
+                p.headerRows = Math.max(0, Math.min(headerRows, numRows));
+                tableHeaderRowsInput.value = p.headerRows;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (tableColsInput || tableRowsInput) {
+            const updateTable = () => {
+              const cols = parseInt(tableColsInput?.value || 3);
+              const dataRows = parseInt(tableRowsInput?.value || 1); // Linhas de dados (sem contar header)
+              const totalRows = dataRows + 1; // +1 para o header
+
+              // Preservar estrutura existente se possível
+              const currentBody = p.body || [];
+              const currentCols = currentBody[0]?.length || cols;
+
+              const newBody = Array(totalRows).fill(null).map((_, i) => {
+                if (i === 0) {
+                  // Primeira linha = header
+                  const existingHeader = currentBody[0] || [];
+                  return Array(cols).fill(null).map((_, j) => {
+                    // Preservar células existentes se possível, senão criar nova estrutura
+                    if (existingHeader[j] && typeof existingHeader[j] === 'object' && existingHeader[j].children) {
+                      return existingHeader[j];
+                    }
+                    return { children: [] };
+                  });
+                } else {
+                  // Linhas de dados
+                  const existingRow = currentBody[i] || [];
+                  return Array(cols).fill(null).map((_, j) => {
+                    if (existingRow[j] && typeof existingRow[j] === 'object' && existingRow[j].children) {
+                      return existingRow[j];
+                    }
+                    return { children: [] };
+                  });
+                }
+              });
+
+              p.body = newBody;
+
+              // Atualizar larguras preservando as existentes quando possível
+              if (!p.widths || p.widths.length !== cols) {
+                const existingWidths = p.widths || [];
+                p.widths = Array(cols).fill(null).map((_, i) => {
+                  return existingWidths[i] || '*';
+                });
+              }
+
+              if (typeof renderAll === 'function') {
+                renderAll();
+              } else if (typeof render === 'function') {
+                render();
+              }
+            };
+            if (tableColsInput) tableColsInput.addEventListener('input', updateTable);
+            if (tableRowsInput) tableRowsInput.addEventListener('input', updateTable);
+          }
+          if (tableLayoutSelect) {
+            tableLayoutSelect.addEventListener('change', () => {
+              p.layout = tableLayoutSelect.value;
+
+              // Mostrar/ocultar opções de layout customizado
+              const customLayoutOptions = document.getElementById('tableCustomLayoutOptions');
+              if (customLayoutOptions) {
+                customLayoutOptions.style.display = (tableLayoutSelect.value === 'custom') ? 'block' : 'none';
+              }
+
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              setTimeout(() => {
+                if (typeof renderInspector === 'function') renderInspector();
+              }, 0);
+            });
+          }
+
+          // Listeners para layout customizado
+          const hLineWidthInput = document.getElementById('insp-tableHLineWidth');
+          const hLineColorInput = document.getElementById('insp-tableHLineColor');
+          const hLineColorTextInput = document.getElementById('insp-tableHLineColorText');
+          const vLineWidthInput = document.getElementById('insp-tableVLineWidth');
+          const vLineColorInput = document.getElementById('insp-tableVLineColor');
+          const vLineColorTextInput = document.getElementById('insp-tableVLineColorText');
+          const paddingLeftInput = document.getElementById('insp-tablePaddingLeft');
+          const paddingRightInput = document.getElementById('insp-tablePaddingRight');
+          const paddingTopInput = document.getElementById('insp-tablePaddingTop');
+          const paddingBottomInput = document.getElementById('insp-tablePaddingBottom');
+
+          const updateCustomLayout = () => {
+            if (!p.customLayout) p.customLayout = {};
+            // IMPORTANTE: Não processar valores imediatamente para inputs number
+            if (hLineWidthInput) {
+              const rawValue = hLineWidthInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.hLineWidth = parseFloat(rawValue) || 1;
+              }
+            }
+            if (hLineColorTextInput && hLineColorTextInput.value) p.customLayout.hLineColor = hLineColorTextInput.value;
+            if (vLineWidthInput) {
+              const rawValue = vLineWidthInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.vLineWidth = parseFloat(rawValue) || 1;
+              }
+            }
+            if (vLineColorTextInput && vLineColorTextInput.value) p.customLayout.vLineColor = vLineColorTextInput.value;
+            if (paddingLeftInput) {
+              const rawValue = paddingLeftInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.paddingLeft = parseInt(rawValue) || 5;
+              }
+            }
+            if (paddingRightInput) {
+              const rawValue = paddingRightInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.paddingRight = parseInt(rawValue) || 5;
+              }
+            }
+            if (paddingTopInput) {
+              const rawValue = paddingTopInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.paddingTop = parseInt(rawValue) || 5;
+              }
+            }
+            if (paddingBottomInput) {
+              const rawValue = paddingBottomInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.customLayout.paddingBottom = parseInt(rawValue) || 5;
+              }
+            }
+
+            updateWithoutLosingFocus(() => {
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            }, 300);
+          };
+
+          if (hLineWidthInput) hLineWidthInput.addEventListener('input', updateCustomLayout);
+          if (hLineColorInput) {
+            hLineColorInput.addEventListener('change', () => {
+              if (hLineColorTextInput) hLineColorTextInput.value = hLineColorInput.value;
+              updateCustomLayout();
+            });
+          }
+          if (hLineColorTextInput) hLineColorTextInput.addEventListener('input', updateCustomLayout);
+
+          if (vLineWidthInput) vLineWidthInput.addEventListener('input', updateCustomLayout);
+          if (vLineColorInput) {
+            vLineColorInput.addEventListener('change', () => {
+              if (vLineColorTextInput) vLineColorTextInput.value = vLineColorInput.value;
+              updateCustomLayout();
+            });
+          }
+          if (vLineColorTextInput) vLineColorTextInput.addEventListener('input', updateCustomLayout);
+
+          if (paddingLeftInput) paddingLeftInput.addEventListener('input', updateCustomLayout);
+          if (paddingRightInput) paddingRightInput.addEventListener('input', updateCustomLayout);
+          if (paddingTopInput) paddingTopInput.addEventListener('input', updateCustomLayout);
+          if (paddingBottomInput) paddingBottomInput.addEventListener('input', updateCustomLayout);
+
+          // Listeners para tabela zebrada
+          const zebraEnabledCheck = document.getElementById('insp-tableZebraEnabled');
+          const zebraColorInput = document.getElementById('insp-tableZebraColor');
+          const zebraColorTextInput = document.getElementById('insp-tableZebraColorText');
+          const zebraWithLinesCheck = document.getElementById('insp-tableZebraWithLines');
+
+          if (zebraEnabledCheck) {
+            zebraEnabledCheck.addEventListener('change', () => {
+              p.zebraEnabled = zebraEnabledCheck.checked;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              setTimeout(() => {
+                if (typeof renderInspector === 'function') renderInspector();
+              }, 0);
+            });
+          }
+
+          if (zebraColorInput) {
+            zebraColorInput.addEventListener('change', () => {
+              if (zebraColorTextInput) zebraColorTextInput.value = zebraColorInput.value;
+              p.zebraColor = zebraColorInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (zebraColorTextInput) {
+            zebraColorTextInput.addEventListener('input', () => {
+              if (zebraColorInput && zebraColorTextInput.value) zebraColorInput.value = zebraColorTextInput.value;
+              p.zebraColor = zebraColorTextInput.value || '#CCCCCC';
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (zebraWithLinesCheck) {
+            zebraWithLinesCheck.addEventListener('change', () => {
+              p.zebraWithLines = zebraWithLinesCheck.checked;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          const tableDontBreakRowsCheck = document.getElementById('insp-tableDontBreakRows');
+          const tableKeepWithHeaderRowsInput = document.getElementById('insp-tableKeepWithHeaderRows');
+
+          if (tableDontBreakRowsCheck) {
+            tableDontBreakRowsCheck.addEventListener('change', () => {
+              p.dontBreakRows = tableDontBreakRowsCheck.checked;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+
+          if (tableKeepWithHeaderRowsInput) {
+            tableKeepWithHeaderRowsInput.addEventListener('input', () => {
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = tableKeepWithHeaderRowsInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.keepWithHeaderRows = parseInt(rawValue) || 0;
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          // Listeners para estilos das células
+          document.querySelectorAll('.table-cell-fill-color').forEach(input => {
+            input.addEventListener('change', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const col = parseInt(input.dataset.col || 0);
+              const textInput = document.querySelector(`.table-cell-fill-color-text[data-row="${row}"][data-col="${col}"]`);
+              if (textInput) textInput.value = input.value;
+
+              if (!p.body[row] || !p.body[row][col]) return;
+              p.body[row][col].fillColor = input.value || undefined;
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          document.querySelectorAll('.table-cell-fill-color-text').forEach(input => {
+            input.addEventListener('input', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const col = parseInt(input.dataset.col || 0);
+              const colorInput = document.querySelector(`.table-cell-fill-color[data-row="${row}"][data-col="${col}"]`);
+              if (colorInput && input.value) colorInput.value = input.value;
+
+              if (!p.body[row] || !p.body[row][col]) return;
+              p.body[row][col].fillColor = input.value || undefined;
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          document.querySelectorAll('.table-cell-color').forEach(input => {
+            input.addEventListener('change', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const col = parseInt(input.dataset.col || 0);
+              const textInput = document.querySelector(`.table-cell-color-text[data-row="${row}"][data-col="${col}"]`);
+              if (textInput) textInput.value = input.value;
+
+              if (!p.body[row] || !p.body[row][col]) return;
+              p.body[row][col].color = input.value || undefined;
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          document.querySelectorAll('.table-cell-color-text').forEach(input => {
+            input.addEventListener('input', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const col = parseInt(input.dataset.col || 0);
+              const colorInput = document.querySelector(`.table-cell-color[data-row="${row}"][data-col="${col}"]`);
+              if (colorInput && input.value) colorInput.value = input.value;
+
+              if (!p.body[row] || !p.body[row][col]) return;
+              p.body[row][col].color = input.value || undefined;
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          document.querySelectorAll('.table-cell-fill-opacity').forEach(input => {
+            input.addEventListener('input', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const col = parseInt(input.dataset.col || 0);
+
+              if (!p.body[row] || !p.body[row][col]) return;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = input.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                const opacity = parseFloat(rawValue);
+                p.body[row][col].fillOpacity = isNaN(opacity) ? 1 : opacity;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          // Listeners para rowSpan e colSpan
+          document.querySelectorAll('.table-cell-rowspan').forEach(input => {
+            input.addEventListener('input', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const col = parseInt(input.dataset.col || 0);
+
+              if (!p.body[row] || !p.body[row][col]) return;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = input.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                const rowSpan = parseInt(rawValue) || 1;
+                p.body[row][col].rowSpan = rowSpan > 1 ? rowSpan : undefined;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          document.querySelectorAll('.table-cell-colspan').forEach(input => {
+            input.addEventListener('input', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const col = parseInt(input.dataset.col || 0);
+
+              if (!p.body[row] || !p.body[row][col]) return;
+              // IMPORTANTE: Não processar o valor imediatamente para inputs number
+              const rawValue = input.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                const colSpan = parseInt(rawValue) || 1;
+                p.body[row][col].colSpan = colSpan > 1 ? colSpan : undefined;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          // Listeners para border (checkboxes)
+          document.querySelectorAll('.table-cell-border').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+              const row = parseInt(checkbox.dataset.row || 0);
+              const col = parseInt(checkbox.dataset.col || 0);
+              const side = parseInt(checkbox.dataset.side || 0);
+
+              if (!p.body[row] || !p.body[row][col]) return;
+
+              if (!p.body[row][col].border) {
+                p.body[row][col].border = [true, true, true, true];
+              }
+
+              p.body[row][col].border[side] = checkbox.checked;
+
+              // Se todas as bordas forem true, pode remover a propriedade (usa padrão)
+              if (p.body[row][col].border.every(b => b === true)) {
+                p.body[row][col].border = undefined;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          // Listeners para borderColor
+          document.querySelectorAll('.table-cell-border-color').forEach(input => {
+            input.addEventListener('change', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const col = parseInt(input.dataset.col || 0);
+              const side = parseInt(input.dataset.side || 0);
+
+              if (!p.body[row] || !p.body[row][col]) return;
+
+              if (!p.body[row][col].borderColor) {
+                p.body[row][col].borderColor = ['', '', '', ''];
+              }
+
+              p.body[row][col].borderColor[side] = input.value || '';
+
+              // Se todas as cores forem vazias, pode remover a propriedade
+              if (p.body[row][col].borderColor.every(c => !c)) {
+                p.body[row][col].borderColor = undefined;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          // Listeners para heights
+          const heightsTypeSelect = document.getElementById('insp-tableHeightsType');
+          const heightsFixedInput = document.getElementById('insp-tableHeightsFixed');
+
+          if (heightsTypeSelect) {
+            heightsTypeSelect.addEventListener('change', () => {
+              const type = heightsTypeSelect.value;
+              const fixedContainer = document.getElementById('table-heights-fixed');
+
+              if (type === 'none') {
+                p.heights = undefined;
+                if (fixedContainer) fixedContainer.style.display = 'none';
+              } else if (type === 'fixed') {
+                const fixedValue = heightsFixedInput ? parseFloat(heightsFixedInput.value) || 40 : 40;
+                p.heights = fixedValue;
+                if (fixedContainer) fixedContainer.style.display = '';
+              } else if (type === 'array') {
+                const numRows = p.body?.length || 2;
+                p.heights = Array(numRows).fill(40);
+                if (fixedContainer) fixedContainer.style.display = 'none';
+                // Re-renderizar para mostrar os inputs de array
+                if (typeof renderInspector === 'function') renderInspector();
+                return;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (heightsFixedInput) {
+            heightsFixedInput.addEventListener('input', () => {
+              const value = parseFloat(heightsFixedInput.value) || 40;
+              p.heights = value;
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          // Listeners para alturas por linha (array)
+          document.querySelectorAll('.table-row-height').forEach(input => {
+            input.addEventListener('input', () => {
+              const row = parseInt(input.dataset.row || 0);
+              const value = parseFloat(input.value) || 40;
+
+              if (!p.heights || !Array.isArray(p.heights)) {
+                const numRows = p.body?.length || 2;
+                p.heights = Array(numRows).fill(40);
+              }
+
+              p.heights[row] = value;
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          // Listeners para hLineStyle e vLineStyle
+          const hLineStyleCheck = document.getElementById('insp-tableHLineStyle');
+          const vLineStyleCheck = document.getElementById('insp-tableVLineStyle');
+          const defaultBorderCheck = document.getElementById('insp-tableDefaultBorder');
+
+          if (hLineStyleCheck) {
+            hLineStyleCheck.addEventListener('change', () => {
+              if (!p.customLayout) p.customLayout = {};
+              if (hLineStyleCheck.checked) {
+                p.customLayout.hLineStyle = true; // Será convertido para função na geração
+              } else {
+                p.customLayout.hLineStyle = undefined;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (vLineStyleCheck) {
+            vLineStyleCheck.addEventListener('change', () => {
+              if (!p.customLayout) p.customLayout = {};
+              if (vLineStyleCheck.checked) {
+                p.customLayout.vLineStyle = true; // Será convertido para função na geração
+              } else {
+                p.customLayout.vLineStyle = undefined;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (defaultBorderCheck) {
+            defaultBorderCheck.addEventListener('change', () => {
+              if (!p.customLayout) p.customLayout = {};
+              p.customLayout.defaultBorder = defaultBorderCheck.checked;
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          // Listeners para larguras das colunas da tabela
+          document.querySelectorAll('.table-col-width-type').forEach(select => {
+            select.addEventListener('change', () => {
+              const colIndex = parseInt(select.dataset.colIndex || 0);
+              const widthType = select.value;
+              const valueInput = document.querySelector(`.table-col-width-value[data-col-index="${colIndex}"]`);
+              const valueContainer = document.getElementById(`table-col-width-value-${colIndex}`);
+
+              if (!p.widths) {
+                const body = p.body || [];
+                const numCols = body[0]?.length || 3;
+                p.widths = Array(numCols).fill('*');
+              }
+
+              if (widthType === 'auto') {
+                p.widths[colIndex] = '*';
+                if (valueContainer) valueContainer.style.display = 'none';
+              } else {
+                if (valueContainer) valueContainer.style.display = '';
+                const currentValue = valueInput ? parseFloat(valueInput.value) || 0 : 0;
+                if (widthType === 'pixels') {
+                  p.widths[colIndex] = currentValue || 100;
+                } else if (widthType === 'percentage') {
+                  p.widths[colIndex] = currentValue ? `${currentValue}%` : '50%';
+                }
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          document.querySelectorAll('.table-col-width-value').forEach(input => {
+            input.addEventListener('input', () => {
+              const colIndex = parseInt(input.dataset.colIndex || 0);
+              const typeSelect = document.querySelector(`.table-col-width-type[data-col-index="${colIndex}"]`);
+              const widthType = typeSelect ? typeSelect.value : 'auto';
+              const value = parseFloat(input.value) || 0;
+
+              if (!p.widths) {
+                const body = p.body || [];
+                const numCols = body[0]?.length || 3;
+                p.widths = Array(numCols).fill('*');
+              }
+
+              if (widthType === 'pixels') {
+                p.widths[colIndex] = value || 100;
+              } else if (widthType === 'percentage') {
+                p.widths[colIndex] = value ? `${value}%` : '50%';
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          });
+
+          // Listener para deletar coluna da tabela
+          document.querySelectorAll('.btn-delete-table-col').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const colIndex = parseInt(btn.dataset.colIndex || 0);
+              const body = p.body || [];
+              const numCols = body[0]?.length || 0;
+
+              if (colIndex > 0 && numCols > 1) {
+                if (typeof showConfirmModal === 'function') {
+                  showConfirmModal(
+                    'Deletar Coluna',
+                    `Tem certeza que deseja deletar a Coluna ${colIndex + 1}?`,
+                    () => {
+                      // Remover coluna de todas as linhas
+                      body.forEach(row => {
+                        if (row && Array.isArray(row) && row[colIndex]) {
+                          row.splice(colIndex, 1);
+                        }
+                      });
+
+                      // Remover largura correspondente
+                      if (p.widths && p.widths[colIndex]) {
+                        p.widths.splice(colIndex, 1);
+                      }
+
+                      // Atualizar número de colunas
+                      if (tableColsInput) {
+                        tableColsInput.value = numCols - 1;
+                      }
+
+                      if (typeof renderAll === 'function') {
+                        renderAll();
+                      } else if (typeof render === 'function') {
+                        render();
+                      }
+                      setTimeout(() => {
+                        if (typeof renderInspector === 'function') renderInspector();
+                      }, 0);
+                    }
+                  );
+                }
+              }
+            });
+          });
+          break;
+
+        case 'image':
+          const imageUrlInput = document.getElementById('insp-imageUrl');
+          const imageSizeModeSelect = document.getElementById('insp-imageSizeMode');
+          const imageWidthInput = document.getElementById('insp-imageWidth');
+          const imageHeightInput = document.getElementById('insp-imageHeight');
+          const imageFitWidthInput = document.getElementById('insp-imageFitWidth');
+          const imageFitHeightInput = document.getElementById('insp-imageFitHeight');
+          const imageCoverWidthInput = document.getElementById('insp-imageCoverWidth');
+          const imageCoverHeightInput = document.getElementById('insp-imageCoverHeight');
+          const imageCoverAlignSelect = document.getElementById('insp-imageCoverAlign');
+          const imageCoverValignSelect = document.getElementById('insp-imageCoverValign');
+          const imageBorderRadiusInput = document.getElementById('insp-imageBorderRadius');
+          const imageOpacityInput = document.getElementById('insp-imageOpacity');
+          const imageAlignmentSelect = document.getElementById('insp-imageAlignment');
+          const imagePositionTypeSelect = document.getElementById('insp-imagePositionType');
+          const imageAbsoluteXInput = document.getElementById('insp-imageAbsoluteX');
+          const imageAbsoluteYInput = document.getElementById('insp-imageAbsoluteY');
+          const imageRelativeXInput = document.getElementById('insp-imageRelativeX');
+          const imageRelativeYInput = document.getElementById('insp-imageRelativeY');
+
+          // Modo de dimensionamento
+          if (imageSizeModeSelect) {
+            imageSizeModeSelect.addEventListener('change', () => {
+              const mode = imageSizeModeSelect.value;
+              // Limpar propriedades não usadas
+              if (mode === 'widthHeight') {
+                delete p.fit;
+                delete p.cover;
+              } else if (mode === 'fit') {
+                delete p.width;
+                delete p.height;
+                delete p.cover;
+                if (!p.fit) p.fit = [100, 100];
+              } else if (mode === 'cover') {
+                delete p.width;
+                delete p.height;
+                delete p.fit;
+                if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
+              }
+              // Atualizar UI
+              setTimeout(() => {
+                if (typeof renderInspector === 'function') renderInspector();
+              }, 0);
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (imageUrlInput) {
+            const imageUrlError = document.getElementById('insp-imageUrlError');
+
+            // Função de validação de URL
+            const validateImageUrl = (url) => {
+              if (!url) {
+                if (imageUrlError) {
+                  imageUrlError.style.display = 'none';
+                }
+                return true;
+              }
+
+              // Verificar se é URL válida ou data URI
+              const isValidUrl = url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/');
+              const isValidFormat = /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url) || url.startsWith('data:image/');
+
+              if (!isValidUrl && !url.startsWith('data:image/')) {
+                if (imageUrlError) {
+                  imageUrlError.textContent = '⚠️ URL inválida. Use http://, https:// ou data:image/';
+                  imageUrlError.style.display = 'block';
+                }
+                return false;
+              }
+
+              if (imageUrlError) {
+                imageUrlError.style.display = 'none';
+              }
+              return true;
+            };
+
+            imageUrlInput.addEventListener('input', async () => {
+              const url = imageUrlInput.value.trim();
+
+              // Validar URL
+              if (!validateImageUrl(url)) {
+                return;
+              }
+
+              p.url = url;
+
+              // Converter URL para base64 apenas para preview visual
+              if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:'))) {
+                try {
+                  const base64 = await convertImageUrlToBase64(url);
+                  if (base64) {
+                    p._base64Preview = base64; // Armazenar base64 apenas para preview
+                  } else {
+                    delete p._base64Preview;
+                  }
+                } catch (e) {
+                  console.warn('Erro ao converter imagem para base64:', e);
+                  delete p._base64Preview;
+                }
+              } else {
+                delete p._base64Preview;
+              }
+
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          // Width e Height
+          if (imageWidthInput) {
+            imageWidthInput.addEventListener('input', () => {
+              const val = imageWidthInput.value.trim();
+              p.width = val ? parseInt(val) : undefined;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (imageHeightInput) {
+            imageHeightInput.addEventListener('input', () => {
+              const val = imageHeightInput.value.trim();
+              p.height = val ? parseInt(val) : undefined;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          // Fit
+          if (imageFitWidthInput) {
+            imageFitWidthInput.addEventListener('input', () => {
+              if (!Array.isArray(p.fit)) p.fit = [100, 100];
+              p.fit[0] = parseInt(imageFitWidthInput.value) || 100;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (imageFitHeightInput) {
+            imageFitHeightInput.addEventListener('input', () => {
+              if (!Array.isArray(p.fit)) p.fit = [100, 100];
+              p.fit[1] = parseInt(imageFitHeightInput.value) || 100;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          // Cover
+          if (imageCoverWidthInput) {
+            imageCoverWidthInput.addEventListener('input', () => {
+              if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
+              p.cover.width = parseInt(imageCoverWidthInput.value) || 300;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (imageCoverHeightInput) {
+            imageCoverHeightInput.addEventListener('input', () => {
+              if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
+              p.cover.height = parseInt(imageCoverHeightInput.value) || 150;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (imageCoverAlignSelect) {
+            imageCoverAlignSelect.addEventListener('change', () => {
+              if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
+              p.cover.align = imageCoverAlignSelect.value;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          if (imageCoverValignSelect) {
+            imageCoverValignSelect.addEventListener('change', () => {
+              if (!p.cover) p.cover = { width: 300, height: 150, align: 'center', valign: 'center' };
+              p.cover.valign = imageCoverValignSelect.value;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+
+          if (imageBorderRadiusInput) {
+            imageBorderRadiusInput.addEventListener('input', () => {
+              p.borderRadius = parseInt(imageBorderRadiusInput.value) || 0;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (imageOpacityInput) {
+            imageOpacityInput.addEventListener('input', () => {
+              const val = imageOpacityInput.value.trim();
+              p.opacity = val ? parseFloat(val) : undefined;
+              if (p.opacity !== undefined) {
+                p.opacity = Math.max(0, Math.min(1, p.opacity)); // Clamp entre 0 e 1
+              }
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (imageAlignmentSelect) {
+            imageAlignmentSelect.addEventListener('change', () => {
+              p.alignment = imageAlignmentSelect.value;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+
+          // Tipo de posicionamento
+          if (imagePositionTypeSelect) {
+            imagePositionTypeSelect.addEventListener('change', () => {
+              const posType = imagePositionTypeSelect.value;
+              if (posType === 'none') {
+                delete p.absolutePosition;
+                delete p.relativePosition;
+              } else if (posType === 'absolute') {
+                delete p.relativePosition;
+                if (!p.absolutePosition) p.absolutePosition = { x: 0, y: 0 };
+              } else if (posType === 'relative') {
+                delete p.absolutePosition;
+                if (!p.relativePosition) p.relativePosition = { x: 0, y: 0 };
+              }
+              // Atualizar UI
+              setTimeout(() => {
+                if (typeof renderInspector === 'function') renderInspector();
+              }, 0);
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          // Posição absoluta
+          if (imageAbsoluteXInput) {
+            imageAbsoluteXInput.addEventListener('input', () => {
+              if (!p.absolutePosition) p.absolutePosition = { x: 0, y: 0 };
+              p.absolutePosition.x = parseInt(imageAbsoluteXInput.value) || 0;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (imageAbsoluteYInput) {
+            imageAbsoluteYInput.addEventListener('input', () => {
+              if (!p.absolutePosition) p.absolutePosition = { x: 0, y: 0 };
+              p.absolutePosition.y = parseInt(imageAbsoluteYInput.value) || 0;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          // Posição relativa
+          if (imageRelativeXInput) {
+            imageRelativeXInput.addEventListener('input', () => {
+              if (!p.relativePosition) p.relativePosition = { x: 0, y: 0 };
+              p.relativePosition.x = parseInt(imageRelativeXInput.value) || 0;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (imageRelativeYInput) {
+            imageRelativeYInput.addEventListener('input', () => {
+              if (!p.relativePosition) p.relativePosition = { x: 0, y: 0 };
+              p.relativePosition.y = parseInt(imageRelativeYInput.value) || 0;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+
+        case 'margin':
+          const marginLeftInput = document.getElementById('insp-marginLeft');
+          const marginTopInput = document.getElementById('insp-marginTop');
+          const marginRightInput = document.getElementById('insp-marginRight');
+          const marginBottomInput = document.getElementById('insp-marginBottom');
+
+          const updateMargin = () => {
+            const left = parseInt(marginLeftInput?.value || 0) || 0;
+            const top = parseInt(marginTopInput?.value || 0) || 0;
+            const right = parseInt(marginRightInput?.value || 0) || 0;
+            const bottom = parseInt(marginBottomInput?.value || 0) || 0;
+            p.margin = [left, top, right, bottom];
+            // Manter compatibilidade com o formato antigo (size)
+            if (top > 0 && left === 0 && right === 0 && bottom === 0) {
+              p.size = top;
+            }
+            updateWithoutLosingFocus(() => {
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            }, 300);
+          };
+
+          if (marginLeftInput) marginLeftInput.addEventListener('input', updateMargin);
+          if (marginTopInput) marginTopInput.addEventListener('input', updateMargin);
+          if (marginRightInput) marginRightInput.addEventListener('input', updateMargin);
+          if (marginBottomInput) marginBottomInput.addEventListener('input', updateMargin);
+          break;
+
+        case 'group':
+          const groupOrientationSelect = document.getElementById('insp-groupOrientation');
+          const groupAlignmentSelect = document.getElementById('insp-groupAlignment');
+          const groupGapInput = document.getElementById('insp-groupGap');
+
+          if (groupOrientationSelect) {
+            groupOrientationSelect.addEventListener('change', () => {
+              p.orientation = groupOrientationSelect.value;
+              // Recalcular larguras quando orientação muda
+              if (typeof updateGroupChildrenWidths === 'function') {
+                updateGroupChildrenWidths(element);
+              }
+              if (typeof updateGroupDimensions === 'function') {
+                updateGroupDimensions(element);
+              }
+              if (typeof renderAll === 'function') {
+                renderAll();
+              } else if (typeof render === 'function') {
+                render();
+              }
+            });
+          }
+          if (groupAlignmentSelect) groupAlignmentSelect.addEventListener('change', () => {
+            p.alignment = groupAlignmentSelect.value;
+            // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+            if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+          });
+          if (groupGapInput) {
+            groupGapInput.addEventListener('input', () => {
+              p.gap = parseInt(groupGapInput.value) || 10;
+              if (typeof updateGroupDimensions === 'function') updateGroupDimensions(element);
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          // Padding sempre 0 (removido conforme solicitado)
+          p.padding = 0;
+          break;
+
+        case 'qr':
+          const qrTextInput = document.getElementById('insp-qrText');
+          const qrFitInput = document.getElementById('insp-qrFit');
+          const qrEccLevelSelect = document.getElementById('insp-qrEccLevel');
+          const qrForegroundInput = document.getElementById('insp-qrForeground');
+          const qrForegroundTextInput = document.getElementById('insp-qrForegroundText');
+          const qrBackgroundInput = document.getElementById('insp-qrBackground');
+          const qrBackgroundTextInput = document.getElementById('insp-qrBackgroundText');
+          const qrAlignmentSelect = document.getElementById('insp-qrAlignment');
+
+          if (qrTextInput) {
+            qrTextInput.addEventListener('input', () => {
+              p.text = qrTextInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (qrFitInput) {
+            qrFitInput.addEventListener('input', () => {
+              p.fit = parseInt(qrFitInput.value) || 100;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (qrEccLevelSelect) {
+            qrEccLevelSelect.addEventListener('change', () => {
+              p.eccLevel = qrEccLevelSelect.value;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          if (qrForegroundInput && qrForegroundTextInput) {
+            qrForegroundInput.addEventListener('input', () => {
+              qrForegroundTextInput.value = qrForegroundInput.value;
+              p.foreground = qrForegroundInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            qrForegroundTextInput.addEventListener('input', () => {
+              if (/^#[0-9A-F]{6}$/i.test(qrForegroundTextInput.value)) {
+                qrForegroundInput.value = qrForegroundTextInput.value;
+                p.foreground = qrForegroundTextInput.value;
+                updateWithoutLosingFocus(() => {
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+                }, 300);
+              }
+            });
+          }
+          if (qrBackgroundInput && qrBackgroundTextInput) {
+            qrBackgroundInput.addEventListener('input', () => {
+              qrBackgroundTextInput.value = qrBackgroundInput.value;
+              p.background = qrBackgroundInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            qrBackgroundTextInput.addEventListener('input', () => {
+              if (/^#[0-9A-F]{6}$/i.test(qrBackgroundTextInput.value)) {
+                qrBackgroundInput.value = qrBackgroundTextInput.value;
+                p.background = qrBackgroundTextInput.value;
+                updateWithoutLosingFocus(() => {
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+                }, 300);
+              }
+            });
+          }
+          if (qrAlignmentSelect) {
+            qrAlignmentSelect.addEventListener('change', () => {
+              p.alignment = qrAlignmentSelect.value;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          break;
+
+        case 'svg':
+          const svgCodeInput = document.getElementById('insp-svgCode');
+          const svgWidthInput = document.getElementById('insp-svgWidth');
+          const svgHeightInput = document.getElementById('insp-svgHeight');
+          const svgColorInput = document.getElementById('insp-svgColor');
+          const svgColorTextInput = document.getElementById('insp-svgColorText');
+          const svgAlignmentSelect = document.getElementById('insp-svgAlignment');
+
+          if (svgCodeInput) {
+            svgCodeInput.addEventListener('input', () => {
+              p.svg = svgCodeInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (svgWidthInput) {
+            svgWidthInput.addEventListener('input', () => {
+              p.width = parseInt(svgWidthInput.value) || 100;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (svgHeightInput) {
+            svgHeightInput.addEventListener('input', () => {
+              p.height = parseInt(svgHeightInput.value) || 100;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (svgColorInput && svgColorTextInput) {
+            svgColorInput.addEventListener('input', () => {
+              svgColorTextInput.value = svgColorInput.value;
+              p.color = svgColorInput.value;
+              updateWithoutLosingFocus(() => {
+                // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+            svgColorTextInput.addEventListener('input', () => {
+              if (/^#[0-9A-F]{6}$/i.test(svgColorTextInput.value)) {
+                svgColorInput.value = svgColorTextInput.value;
+                p.color = svgColorTextInput.value;
+                updateWithoutLosingFocus(() => {
+                  // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+                  if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+                }, 300);
+              }
+            });
+          }
+          if (svgAlignmentSelect) {
+            svgAlignmentSelect.addEventListener('change', () => {
+              p.alignment = svgAlignmentSelect.value;
+              // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          break;
+
+        case 'barcode':
+          const barcodeValueInput = document.getElementById('insp-barcodeValue');
+          const barcodeFormatSelect = document.getElementById('insp-barcodeFormat');
+          const barcodeLineWidthInput = document.getElementById('insp-barcodeLineWidth');
+          const barcodeHeightInput = document.getElementById('insp-barcodeHeight');
+          const barcodeDisplayValueCheck = document.getElementById('insp-barcodeDisplayValue');
+          const barcodeFontSizeInput = document.getElementById('insp-barcodeFontSize');
+          const barcodeMarginInput = document.getElementById('insp-barcodeMargin');
+          const barcodeFitWInput = document.getElementById('insp-barcodeFitW');
+          const barcodeFitHInput = document.getElementById('insp-barcodeFitH');
+          const barcodeAlignmentSelect = document.getElementById('insp-barcodeAlignment');
+
+          if (barcodeValueInput) {
+            barcodeValueInput.addEventListener('input', () => {
+              p.barcodeValue = barcodeValueInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeFormatSelect) {
+            barcodeFormatSelect.addEventListener('change', () => {
+              p.format = barcodeFormatSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeLineWidthInput) {
+            barcodeLineWidthInput.addEventListener('input', () => {
+              const rawValue = barcodeLineWidthInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.lineWidth = parseFloat(rawValue) || 1.5;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeHeightInput) {
+            barcodeHeightInput.addEventListener('input', () => {
+              const rawValue = barcodeHeightInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.barHeight = parseInt(rawValue) || 30;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeDisplayValueCheck) {
+            barcodeDisplayValueCheck.addEventListener('change', () => {
+              p.displayValue = barcodeDisplayValueCheck.checked;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeFontSizeInput) {
+            barcodeFontSizeInput.addEventListener('input', () => {
+              const rawValue = barcodeFontSizeInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.fontSize = parseInt(rawValue) || 10;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeMarginInput) {
+            barcodeMarginInput.addEventListener('input', () => {
+              const rawValue = barcodeMarginInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                p.margin = parseInt(rawValue) || 0;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeFitWInput) {
+            barcodeFitWInput.addEventListener('input', () => {
+              const rawValue = barcodeFitWInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                if (!p.fit) p.fit = [201, 42];
+                p.fit[0] = parseInt(rawValue) || 201;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeFitHInput) {
+            barcodeFitHInput.addEventListener('input', () => {
+              const rawValue = barcodeFitHInput.value;
+              if (rawValue !== '' && !isNaN(rawValue)) {
+                if (!p.fit) p.fit = [201, 42];
+                p.fit[1] = parseInt(rawValue) || 42;
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          if (barcodeAlignmentSelect) {
+            barcodeAlignmentSelect.addEventListener('change', () => {
+              p.alignment = barcodeAlignmentSelect.value;
+              if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+            });
+          }
+          break;
+
+        case 'stamp':
+          const stampSourceTypeSelect = document.getElementById('insp-stampSourceType');
+          const stampValueInput = document.getElementById('insp-stampValue');
+          const stampValueField = document.getElementById('insp-stampValueField');
+          const stampValueLabel = document.getElementById('insp-stampValueLabel');
+          const stampFitWInput = document.getElementById('insp-stampFitW');
+          const stampFitHInput = document.getElementById('insp-stampFitH');
+          const stampAlignmentSelect = document.getElementById('insp-stampAlignment');
+          const stampOpacityInput = document.getElementById('insp-stampOpacity');
+
+          if (stampSourceTypeSelect) {
+            stampSourceTypeSelect.addEventListener('change', () => {
+              p.sourceType = stampSourceTypeSelect.value;
+              // Atualizar campo de valor baseado no tipo
+              if (stampValueField && stampValueLabel) {
+                if (p.sourceType === 'svg') {
+                  stampValueLabel.textContent = 'Código SVG';
+                  stampValueField.innerHTML = `<textarea id="insp-stampValue" rows="6" placeholder="<svg>...</svg>">${escapeHtml(p.value || '')}</textarea>`;
+                } else {
+                  stampValueLabel.textContent = 'URL ou DataURL';
+                  stampValueField.innerHTML = `<input type="text" id="insp-stampValue" value="${escapeHtml(p.value || '')}" placeholder="https://exemplo.com/imagem.png ou data:image/...">`;
+                }
+                // Re-attach listener
+                const newInput = document.getElementById('insp-stampValue');
+                if (newInput) {
+                  newInput.addEventListener('input', () => {
+                    p.value = newInput.value;
+                    updateWithoutLosingFocus(() => {
+                      if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+                    }, 300);
+                  });
+                }
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (stampValueInput) {
+            stampValueInput.addEventListener('input', () => {
+              p.value = stampValueInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (stampFitWInput) {
+            stampFitWInput.addEventListener('input', () => {
+              if (!Array.isArray(p.fit)) p.fit = [120, 120];
+              p.fit[0] = parseInt(stampFitWInput.value) || 120;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (stampFitHInput) {
+            stampFitHInput.addEventListener('input', () => {
+              if (!Array.isArray(p.fit)) p.fit = [120, 120];
+              p.fit[1] = parseInt(stampFitHInput.value) || 120;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (stampAlignmentSelect) {
+            stampAlignmentSelect.addEventListener('change', () => {
+              p.alignment = stampAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (stampOpacityInput) {
+            stampOpacityInput.addEventListener('input', () => {
+              p.opacity = parseFloat(stampOpacityInput.value) || 1;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+
+        case 'checkbox':
+        case 'radio':
+          const choiceTextInput = document.getElementById('insp-choiceText');
+          const choiceChecked = document.getElementById('insp-choiceChecked');
+          const choiceIconPositionSelect = document.getElementById('insp-choiceIconPosition');
+          const choiceIconSizeInput = document.getElementById('insp-choiceIconSize');
+          const choiceGapInput = document.getElementById('insp-choiceGap');
+          const choiceAlignmentSelect = document.getElementById('insp-choiceAlignment');
+
+          // Garantir que choiceType está definido
+          if (!p.choiceType) {
+            p.choiceType = element.type;
+          }
+
+          if (choiceTextInput) {
+            choiceTextInput.addEventListener('input', () => {
+              p.choiceText = choiceTextInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (choiceChecked) {
+            choiceChecked.addEventListener('change', () => {
+              p.choiceChecked = choiceChecked.checked;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (choiceIconPositionSelect) {
+            choiceIconPositionSelect.addEventListener('change', () => {
+              p.choiceIconPosition = choiceIconPositionSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (choiceIconSizeInput) {
+            choiceIconSizeInput.addEventListener('input', () => {
+              p.choiceIconSize = parseInt(choiceIconSizeInput.value) || 12;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (choiceGapInput) {
+            choiceGapInput.addEventListener('input', () => {
+              p.choiceGap = parseInt(choiceGapInput.value) || 8;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (choiceAlignmentSelect) {
+            choiceAlignmentSelect.addEventListener('change', () => {
+              p.alignment = choiceAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+
+        case 'fillLine':
+          const fillLineWidthInput = document.getElementById('insp-fillLineWidth');
+          const fillLineThicknessInput = document.getElementById('insp-fillLineThickness');
+          const fillLineColorInput = document.getElementById('insp-fillLineColor');
+          const fillLineAlignmentSelect = document.getElementById('insp-fillLineAlignment');
+
+          if (fillLineWidthInput) {
+            fillLineWidthInput.addEventListener('input', () => {
+              p.lineWidth = parseInt(fillLineWidthInput.value) || 200;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (fillLineThicknessInput) {
+            fillLineThicknessInput.addEventListener('input', () => {
+              p.thickness = parseFloat(fillLineThicknessInput.value) || 0.8;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (fillLineColorInput) {
+            fillLineColorInput.addEventListener('input', () => {
+              p.color = fillLineColorInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (fillLineAlignmentSelect) {
+            fillLineAlignmentSelect.addEventListener('change', () => {
+              p.alignment = fillLineAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+
+        case 'chart':
+          const chartTypeSelect = document.getElementById('insp-chartType');
+          const chartWidthInput = document.getElementById('insp-chartWidth');
+          const chartHeightInput = document.getElementById('insp-chartHeight');
+          const chartFitWInput = document.getElementById('insp-chartFitW');
+          const chartFitHInput = document.getElementById('insp-chartFitH');
+          const chartBackgroundColorInput = document.getElementById('insp-chartBackgroundColor');
+          const chartDevicePixelRatioInput = document.getElementById('insp-chartDevicePixelRatio');
+          const chartDataInput = document.getElementById('insp-chartData');
+          const chartOptionsInput = document.getElementById('insp-chartOptions');
+          const chartAlignmentSelect = document.getElementById('insp-chartAlignment');
+
+          if (chartTypeSelect) {
+            chartTypeSelect.addEventListener('change', () => {
+              p.chartType = chartTypeSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (chartWidthInput) {
+            chartWidthInput.addEventListener('input', () => {
+              p.chartWidth = parseInt(chartWidthInput.value) || 400;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (chartHeightInput) {
+            chartHeightInput.addEventListener('input', () => {
+              p.chartHeight = parseInt(chartHeightInput.value) || 200;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (chartFitWInput) {
+            chartFitWInput.addEventListener('input', () => {
+              if (!Array.isArray(p.chartFit)) p.chartFit = [400, 200];
+              p.chartFit[0] = parseInt(chartFitWInput.value) || 400;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (chartFitHInput) {
+            chartFitHInput.addEventListener('input', () => {
+              if (!Array.isArray(p.chartFit)) p.chartFit = [400, 200];
+              p.chartFit[1] = parseInt(chartFitHInput.value) || 200;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (chartBackgroundColorInput) {
+            chartBackgroundColorInput.addEventListener('input', () => {
+              p.chartBackgroundColor = chartBackgroundColorInput.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (chartDevicePixelRatioInput) {
+            chartDevicePixelRatioInput.addEventListener('input', () => {
+              p.chartDevicePixelRatio = parseInt(chartDevicePixelRatioInput.value) || 2;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+
+          if (chartDataInput) {
+            chartDataInput.addEventListener('input', () => {
+              try {
+                const parsed = JSON.parse(chartDataInput.value);
+                p.chartData = parsed;
+              } catch (e) {
+                // Ignorar JSON inválido temporariamente
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 500);
+            });
+          }
+
+          if (chartOptionsInput) {
+            chartOptionsInput.addEventListener('input', () => {
+              try {
+                const parsed = JSON.parse(chartOptionsInput.value);
+                // Garantir que animation.duration seja 0
+                if (!parsed.animation) parsed.animation = {};
+                parsed.animation.duration = 0;
+                parsed.responsive = false;
+                p.chartOptions = parsed;
+              } catch (e) {
+                // Ignorar JSON inválido temporariamente
+              }
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 500);
+            });
+          }
+
+          if (chartAlignmentSelect) {
+            chartAlignmentSelect.addEventListener('change', () => {
+              p.alignment = chartAlignmentSelect.value;
+              updateWithoutLosingFocus(() => {
+                if (typeof renderAll === 'function') renderAll(false); else if (typeof render === 'function') render();
+              }, 300);
+            });
+          }
+          break;
+      }
+    }
+
+    // -----------------------
+    // PDFMake Builder (nested)
+    // -----------------------
+    function elementToPdfmake(el, context = {}) {
+      const p = el.properties || {};
+      const { inHeader = false, inFooter = false, inTableCell = false } = context;
+
+      // helper for common props
+      const common = {};
+      if (Array.isArray(p.margin)) common.margin = p.margin;
+      if (p.alignment) common.alignment = p.alignment;
+      if (p.style) common.style = p.style;
+
+      if (el.type === 'header') {
+        const headerObj = {
+          ...common,
+          text: p.text || '',
+          fontSize: Number(p.fontSize || 18),
+          bold: !!p.bold
+        };
+
+        // ID do elemento (para linkToDestination)
+        if (p.id && p.id.trim()) {
+          headerObj.id = p.id.trim();
+        }
+
+        // Styling completo
+        if (p.color) headerObj.color = p.color;
+        if (p.background) headerObj.background = p.background;
+        if (p.font) headerObj.font = p.font;
+        if (p.decoration) headerObj.decoration = p.decoration;
+        if (p.alignment) headerObj.alignment = p.alignment;
+        if (p.italics) headerObj.italics = true;
+        if (p.lineHeight !== undefined) headerObj.lineHeight = p.lineHeight;
+        if (p.characterSpacing !== undefined) headerObj.characterSpacing = p.characterSpacing;
+        if (p.decorationStyle) headerObj.decorationStyle = p.decorationStyle;
+        if (p.decorationColor) headerObj.decorationColor = p.decorationColor;
+        if (p.fontFeatures && Array.isArray(p.fontFeatures) && p.fontFeatures.length > 0) headerObj.fontFeatures = p.fontFeatures;
+
+        // Link
+        if (p.link && p.link.trim()) {
+          headerObj.link = p.link.trim();
+        } else if (p.linkToPage) {
+          headerObj.linkToPage = p.linkToPage;
+        } else if (p.linkToDestination) {
+          headerObj.linkToDestination = p.linkToDestination;
+        }
+
+        return headerObj;
+      }
+
+      if (el.type === 'text') {
+        let textValue = p.text || '';
+
+        // Se o texto estiver dentro de header/footer e contiver placeholders, substituir automaticamente
+        // Usar contexto passado ou verificar diretamente
+        const isInHeaderFooter = inHeader || inFooter || isElementInHeader(el.id) || isElementInFooter(el.id);
+
+        if (isInHeaderFooter && textValue.includes('{{')) {
+          // Substituir placeholders por template literals que serão avaliados na função header/footer
+          // O PDFMake espera que isso seja uma string com ${currentPage} e ${pageCount}
+          textValue = textValue
+            .replace(/\{\{pageNumber\}\}/g, '${currentPage}')
+            .replace(/\{\{totalPages\}\}/g, '${pageCount}');
+        }
+
+        const textObj = {
+          ...common,
+          text: textValue,
+          fontSize: Number(p.fontSize || 14)
+        };
+
+        // ID do elemento (para linkToDestination)
+        if (p.id && p.id.trim()) {
+          textObj.id = p.id.trim();
+        }
+
+        // Styling completo
+        if (p.color) textObj.color = p.color;
+        if (p.background) textObj.background = p.background;
+        if (p.font) textObj.font = p.font;
+        if (p.decoration) textObj.decoration = p.decoration;
+        if (p.alignment) textObj.alignment = p.alignment;
+        if (p.bold) textObj.bold = true;
+        if (p.italics) textObj.italics = true;
+        if (p.lineHeight !== undefined) textObj.lineHeight = p.lineHeight;
+        if (p.characterSpacing !== undefined) textObj.characterSpacing = p.characterSpacing;
+        if (p.decorationStyle) textObj.decorationStyle = p.decorationStyle;
+        if (p.decorationColor) textObj.decorationColor = p.decorationColor;
+        if (p.fontFeatures && Array.isArray(p.fontFeatures) && p.fontFeatures.length > 0) textObj.fontFeatures = p.fontFeatures;
+
+        // Link
+        if (p.link && p.link.trim()) {
+          textObj.link = p.link.trim();
+        } else if (p.linkToPage) {
+          textObj.linkToPage = p.linkToPage;
+        } else if (p.linkToDestination) {
+          textObj.linkToDestination = p.linkToDestination;
+        }
+
+        return textObj;
+      }
+
+      if (el.type === 'image') {
+        const out = {
+          ...common,
+          image: p.url || ''
+        };
+
+        // Dimensionamento: width/height, fit ou cover (mutuamente exclusivos)
+        if (p.fit !== undefined) {
+          out.fit = Array.isArray(p.fit) ? [Number(p.fit[0]), Number(p.fit[1])] : Number(p.fit);
+        } else if (p.cover !== undefined) {
+          out.cover = {
+            width: Number(p.cover.width || 300),
+            height: Number(p.cover.height || 150),
+            ...(p.cover.align ? { align: p.cover.align } : {}),
+            ...(p.cover.valign ? { valign: p.cover.valign } : {})
+          };
+        } else {
+          if (p.width !== undefined) out.width = Number(p.width);
+          if (p.height !== undefined) out.height = Number(p.height);
+        }
+
+        // Outras propriedades
+        if (p.alignment) out.alignment = p.alignment;
+        if (p.opacity !== undefined) out.opacity = Number(p.opacity);
+        if (p.borderRadius && p.borderRadius > 0) out.borderRadius = Number(p.borderRadius);
+        if (p.absolutePosition) {
+          out.absolutePosition = {
+            x: Number(p.absolutePosition.x || 0),
+            y: Number(p.absolutePosition.y || 0)
+          };
+        }
+        if (p.relativePosition) {
+          out.relativePosition = {
+            x: Number(p.relativePosition.x || 0),
+            y: Number(p.relativePosition.y || 0)
+          };
+        }
+
+        return out;
+      }
+
+      if (el.type === 'margin') {
+        // No pdfmake, um "texto vazio" com margin ou um canvas; aqui usamos um texto invisível
+        // Suportar tanto o formato antigo (size) quanto o novo (margin array)
+        const marginArray = p.margin || (p.size ? [0, p.size, 0, 0] : [0, 20, 0, 0]);
+        return { text: ' ', margin: marginArray };
+      }
+
+      if (el.type === 'pageBreak') {
+        return { text: ' ', pageBreak: 'after' };
+      }
+
+      if (el.type === 'qr') {
+        const qrObj = {
+          ...common,
+          qr: p.text || 'https://exemplo.com',
+          fit: Number(p.fit || 100)
+        };
+        if (p.eccLevel) qrObj.eccLevel = p.eccLevel;
+        // Sempre aplicar foreground e background (mesmo que sejam os padrões)
+        qrObj.foreground = p.foreground || '#000000';
+        qrObj.background = p.background || '#ffffff';
+        if (p.alignment) qrObj.alignment = p.alignment;
+        return qrObj;
+      }
+
+      if (el.type === 'svg') {
+        const svgObj = {
+          ...common,
+          svg: p.svg || '<svg></svg>'
+        };
+        if (p.width) svgObj.width = Number(p.width);
+        if (p.height) svgObj.height = Number(p.height);
+        if (p.color) svgObj.color = p.color;
+        if (p.alignment) svgObj.alignment = p.alignment;
+        return svgObj;
+      }
+
+      if (el.type === 'stamp') {
+        const stampObj = {
+          stampType: p.sourceType || 'image',
+          stamp: p.value || '',
+          fit: Array.isArray(p.fit) ? p.fit : [p.fit || 120, p.fit || 120],
+          alignment: p.alignment || 'center',
+          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        };
+
+        if (p.opacity !== undefined) {
+          stampObj.opacity = Number(p.opacity);
+        }
+
+        return stampObj;
+      }
+
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        const choiceType = p.choiceType || el.type;
+        const choiceText = p.choiceText || 'Texto...';
+        const choiceChecked = p.choiceChecked === true;
+        const choiceIconPosition = p.choiceIconPosition || 'before';
+        const choiceGap = Number(p.choiceGap || 8);
+        const choiceIconSize = Number(p.choiceIconSize || 12);
+        const alignment = p.alignment || 'left';
+        const margin = Array.isArray(p.margin) ? p.margin : [0, 0, 0, 10];
+
+        // Função para gerar SVG do ícone
+        function generateChoiceSVG(type, checked, size) {
+          if (type === 'checkbox') {
+            if (checked) {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="1" y="1" width="${size - 2}" height="${size - 2}" fill="none" stroke="#000" stroke-width="1"/><path d="M 3 ${size * 0.5} L ${size * 0.4} ${size * 0.7} L ${size * 0.8} ${size * 0.3}" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            } else {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="1" y="1" width="${size - 2}" height="${size - 2}" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+            }
+          } else if (type === 'radio') {
+            if (checked) {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="none" stroke="#000" stroke-width="1"/><circle cx="${size / 2}" cy="${size / 2}" r="${size / 4}" fill="#000"/></svg>`;
+            } else {
+              return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 1}" fill="none" stroke="#000" stroke-width="1"/></svg>`;
+            }
+          }
+          return '';
+        }
+
+        const svgString = generateChoiceSVG(choiceType, choiceChecked, choiceIconSize);
+
+        // Montar células da tabela
+        const iconCell = {
+          svg: svgString,
+          width: choiceIconSize,
+          height: choiceIconSize,
+          alignment: 'center',
+          margin: choiceIconPosition === 'before' ? [0, 0, choiceGap, 0] : [choiceGap, 0, 0, 0]
+        };
+
+        const textCell = {
+          text: choiceText,
+          fontSize: 10,
+          margin: [0, 0, 0, 0]
+        };
+
+        // Definir larguras e ordem das colunas baseado na posição do ícone
+        let widths, body;
+        if (choiceIconPosition === 'before') {
+          widths = [choiceIconSize, '*'];
+          body = [[iconCell, textCell]];
+        } else {
+          widths = ['*', choiceIconSize];
+          body = [[textCell, iconCell]];
+        }
+
+        return {
+          alignment: alignment,
+          margin: margin,
+          table: {
+            widths: widths,
+            body: body
+          },
+          layout: 'noBorders'
+        };
+      }
+
+      if (el.type === 'fillLine') {
+        const fillLineObj = {
+          fillLine: true,
+          lineWidth: Number(p.lineWidth || 200),
+          thickness: Number(p.thickness || 0.8),
+          color: p.color || '#000000',
+          alignment: p.alignment || 'left',
+          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        };
+
+        return fillLineObj;
+      }
+
+      if (el.type === 'chart') {
+        const chartObj = {
+          chart: true,
+          chartType: p.chartType || 'bar',
+          chartWidth: Number(p.chartWidth || 400),
+          chartHeight: Number(p.chartHeight || 200),
+          chartFit: Array.isArray(p.chartFit) ? p.chartFit : [p.chartFit || 400, p.chartFit || 200],
+          chartBackgroundColor: p.chartBackgroundColor || '#FFFFFF',
+          chartDevicePixelRatio: Number(p.chartDevicePixelRatio || 2),
+          chartData: p.chartData || { labels: [], datasets: [] },
+          chartOptions: p.chartOptions || { responsive: false, animation: { duration: 0 } },
+          alignment: p.alignment || 'center',
+          margin: Array.isArray(p.margin) ? p.margin : [0, 0, 0, 0]
+        };
+
+        return chartObj;
+      }
+
+      if (el.type === 'barcode') {
+        // Formato obrigatório: { alignment: 'center', verticalAlignment: 'middle', stack: [{ barcode: 'VALOR', fit: [201, 42] }] }
+        const barcodeObj = {
+          barcode: p.barcodeValue || 'ABC123456789',
+          fit: p.fit || [201, 42]
+        };
+
+        // Adicionar propriedades extras se necessário (para o script_fixo do Bubble)
+        if (p.format) barcodeObj.barcodeFormat = p.format;
+        if (p.lineWidth !== undefined) barcodeObj.barcodeWidth = Number(p.lineWidth);
+        if (p.barHeight !== undefined) barcodeObj.barcodeHeight = Number(p.barHeight);
+        if (p.displayValue !== undefined) barcodeObj.barcodeDisplayValue = p.displayValue;
+        if (p.fontSize !== undefined) barcodeObj.barcodeFontSize = Number(p.fontSize);
+        if (p.margin !== undefined) barcodeObj.barcodeMargin = Number(p.margin);
+
+        const stackObj = {
+          alignment: p.alignment || 'center',
+          stack: [barcodeObj]
+        };
+
+        // Se estiver dentro de célula de tabela, adicionar verticalAlignment
+        if (inTableCell) {
+          stackObj.verticalAlignment = p.verticalAlignment || 'middle';
+        } else if (p.verticalAlignment) {
+          stackObj.verticalAlignment = p.verticalAlignment;
+        }
+
+        // Aplicar margin se existir
+        if (Array.isArray(p.margin)) {
+          stackObj.margin = p.margin;
+        }
+
+        return stackObj;
+      }
+
+      if (el.type === 'group') {
+        // group no editor = stack no PDF
+        // Passar contexto para elementos filhos (se estiver em header/footer, manter contexto)
+        const kids = (p.children || []).map(ch => elementToPdfmake(ch, context));
+        return kids.length <= 1 ? (kids[0] || { text: '' }) : { stack: kids };
+      }
+
+      if (el.type === 'columns') {
+        const cols = (p.columns || []).map(col => {
+          // Passar contexto para elementos filhos
+          const kids = (col.children || []).map(ch => elementToPdfmake(ch, context));
+          const contentNode = kids.length <= 1 ? (kids[0] || { text: '' }) : { stack: kids };
+
+          // Processar width: pode ser '*', número, ou string com '%'
+          let width = col.width || '*';
+          if (typeof width === 'string' && width.endsWith('%')) {
+            // Manter como string com % para PDFMake
+            width = width;
+          } else if (typeof width === 'number') {
+            // Número = pixels
+            width = width;
+          } else {
+            // '*' ou 'auto' = automático
+            width = '*';
+          }
+
+          return { width, ...contentNode };
+        });
+
+        return {
+          ...common,
+          columnGap: Number(p.gap || 10),
+          columns: cols
+        };
+      }
+
+      if (el.type === 'list') {
+        const items = (p.items || []).map(it => {
+          if (!it) return '';
+          if (it.kind === 'text') return it.text || '';
+          if (it.kind === 'node' && it.node) return elementToPdfmake(it.node, context);
+          return '';
+        });
+        const listType = p.listType === 'ol' ? 'ol' : 'ul';
+        const listObj = {
+          ...common,
+          [listType]: items
+        };
+
+        // Adicionar propriedades extras para listas ordenadas
+        if (listType === 'ol') {
+          if (p.start && p.start !== 1) listObj.start = p.start;
+          if (p.reversed) listObj.reversed = true;
+          if (p.type) listObj.type = p.type;
+        } else {
+          // Para listas não ordenadas, apenas type e markerColor
+          if (p.type) listObj.type = p.type;
+          if (p.markerColor) listObj.markerColor = p.markerColor;
+        }
+
+        return listObj;
+      }
+
+      if (el.type === 'table') {
+        // Primeiro, processar o body e identificar células com rowSpan/colSpan
+        const processedBody = [];
+        const originalBody = p.body || [];
+
+        // Rastrear células cobertas por spans
+        const coveredCells = new Set();
+
+        for (let r = 0; r < originalBody.length; r++) {
+          const processedRow = [];
+
+          for (let c = 0; c < originalBody[r].length; c++) {
+            // Pular células já cobertas
+            if (coveredCells.has(`${r}-${c}`)) {
+              processedRow.push({}); // Célula vazia para PDFMake
+              continue;
+            }
+
+            const cell = originalBody[r][c];
+
+            // Se a célula é null ou string vazia, manter como objeto vazio
+            if (!cell || (typeof cell === 'string' && cell === '')) {
+              processedRow.push({});
+              continue;
+            }
+
+            // Processar conteúdo da célula
+            // Passar contexto para elementos filhos (se estiver em header/footer, manter contexto)
+            // Adicionar flag inTableCell para barcode aplicar verticalAlignment
+            const kids = (cell.children || []).map(ch => elementToPdfmake(ch, { ...context, inTableCell: true }));
+            const cellContent = (kids.length <= 1) ? (kids[0] || '') : { stack: kids };
+
+            // Aplicar estilos da célula
+            // Se a célula tem um estilo definido, usar referência ao estilo
+            // Caso contrário, aplicar propriedades inline
+            const cellObj = typeof cellContent === 'string' ? { text: cellContent } : cellContent;
+
+            // Se a célula tem um nome de estilo, usar referência ao estilo
+            // Propriedades que podem estar no estilo: fontSize, alignment, margin, color (texto), bold, italics
+            if (cell._styleName) {
+              cellObj.style = cell._styleName;
+            } else {
+              // Aplicar propriedades inline (fallback se não houver estilo)
+              if (cell.fontSize !== undefined) cellObj.fontSize = cell.fontSize;
+              if (cell.alignment) cellObj.alignment = cell.alignment;
+              if (cell.margin && Array.isArray(cell.margin)) cellObj.margin = cell.margin;
+              if (cell.color) cellObj.color = cell.color; // Cor do texto
+              if (cell.bold !== undefined) cellObj.bold = cell.bold;
+              if (cell.italics !== undefined) cellObj.italics = cell.italics;
+            }
+
+            // Propriedades específicas da célula (nunca devem ser estilos)
+            // fillColor = cor de fundo da célula (diferente de color = cor do texto)
+            // Só aplicar fillColor individual se zebra não estiver ativado
+            if (!p.zebraEnabled && cell.fillColor) cellObj.fillColor = cell.fillColor;
+            if (cell.fillOpacity !== undefined) cellObj.fillOpacity = Number(cell.fillOpacity);
+
+            // rowSpan e colSpan - IMPORTANTE: marcar células cobertas
+            if (cell.rowSpan && cell.rowSpan > 1) {
+              cellObj.rowSpan = cell.rowSpan;
+              // Marcar células abaixo como cobertas
+              for (let sr = 1; sr < cell.rowSpan; sr++) {
+                if (r + sr < originalBody.length) {
+                  coveredCells.add(`${r + sr}-${c}`);
+                }
+              }
+            }
+            if (cell.colSpan && cell.colSpan > 1) {
+              cellObj.colSpan = cell.colSpan;
+              // Marcar células à direita como cobertas
+              for (let sc = 1; sc < cell.colSpan; sc++) {
+                if (c + sc < originalBody[r].length) {
+                  coveredCells.add(`${r}-${c + sc}`);
+                }
+              }
+            }
+
+            // border (array de 4 booleanos [left, top, right, bottom])
+            if (cell.border && Array.isArray(cell.border)) {
+              // Sempre adicionar o array de border, mesmo se for [true, true, true, true]
+              // O PDFMake usa isso para controlar quais bordas mostrar
+              cellObj.border = cell.border.map(b => Boolean(b));
+            }
+
+            // borderColor (array de 4 cores)
+            if (cell.borderColor && Array.isArray(cell.borderColor)) {
+              // Só adicionar se houver pelo menos uma cor definida
+              if (cell.borderColor.some(c => c && c.trim())) {
+                cellObj.borderColor = cell.borderColor.map(c => c || '');
+              }
+            }
+
+            // verticalAlignment (deve estar na célula, não no texto)
+            if (cell.verticalAlignment) {
+              cellObj.verticalAlignment = cell.verticalAlignment;
+            }
+
+            processedRow.push(cellObj);
+          }
+
+          processedBody.push(processedRow);
+        }
+
+        const body = processedBody;
+
+        const tableObj = {
+          ...common,
+          table: {
+            widths: (p.widths || (body[0] ? body[0].map(() => '*') : ['*'])),
+            body
+          }
+        };
+
+        // heights (pode ser número, array ou função)
+        if (p.heights !== undefined) {
+          if (typeof p.heights === 'number') {
+            tableObj.table.heights = p.heights;
+          } else if (Array.isArray(p.heights)) {
+            tableObj.table.heights = p.heights.map(h => Number(h) || 40);
+          }
+          // Função será tratada separadamente se necessário
+        }
+
+        // Tabela zebrada tem prioridade - se ativada, sempre criar layout como objeto
+        // IMPORTANTE: layout deve ficar no mesmo nível que table, não dentro de table
+        if (p.zebraEnabled && p.zebraColor) {
+          // Criar layout como objeto (não string) - mesmo nível que table
+          tableObj.layout = {};
+
+          // Usar a cor diretamente como string no código da função
+          // Criar função usando Function constructor para que a cor seja string literal no código fonte
+          const zebraColorStr = p.zebraColor;
+          // Criar função que quando serializada já terá a cor como string literal
+          tableObj.layout.fillColor = new Function('i', 'node',
+            `return (i % 2 === 0) ? '${zebraColorStr}' : null;`
+          );
+          // Armazenar a cor como propriedade também para backup na serialização
+          tableObj.layout.fillColor._zebraColor = zebraColorStr;
+
+          // Se zebraWithLines estiver ativado, adicionar linhas horizontais (seguindo o exemplo)
+          // IMPORTANTE: Usar new Function() para que valores sejam literais no código gerado
+          if (p.zebraWithLines !== false) {
+            tableObj.layout.hLineWidth = new Function('i', 'node',
+              `if (i === 0 || i === node.table.body.length) {
+                return 0;
+              }
+              return (i === node.table.headerRows) ? 2 : 1;`
+            );
+            tableObj.layout.hLineColor = new Function('i',
+              `return i === 1 ? 'black' : '#aaa';`
+            );
+            tableObj.layout.vLineWidth = new Function('i',
+              `return 0;`
+            );
+          } else {
+            // Sem linhas horizontais
+            tableObj.layout.hLineWidth = new Function('i', 'node',
+              `return 0;`
+            );
+            tableObj.layout.vLineWidth = new Function('i',
+              `return 0;`
+            );
+          }
+
+          // Padding padrão (se não houver customLayout)
+          // IMPORTANTE: Usar new Function() para que valores sejam literais no código gerado
+          if (!p.customLayout || !p.customLayout.paddingLeft) {
+            tableObj.layout.paddingLeft = new Function('i',
+              `return i === 0 ? 0 : 8;`
+            );
+          }
+          if (!p.customLayout || !p.customLayout.paddingRight) {
+            tableObj.layout.paddingRight = new Function('i', 'node',
+              `return (i === node.table.widths.length - 1) ? 0 : 8;`
+            );
+          }
+
+          // Se houver customLayout, aplicar suas configurações de padding
+          // IMPORTANTE: Usar new Function() para que valores sejam literais no código gerado
+          if (p.customLayout) {
+            if (p.customLayout.paddingLeft !== undefined) {
+              const paddingLeft = Number(p.customLayout.paddingLeft);
+              tableObj.layout.paddingLeft = new Function('i',
+                `return i === 0 ? 0 : ${paddingLeft};`
+              );
+            }
+            if (p.customLayout.paddingRight !== undefined) {
+              const paddingRight = Number(p.customLayout.paddingRight);
+              tableObj.layout.paddingRight = new Function('i', 'node',
+                `return (i === node.table.widths.length - 1) ? 0 : ${paddingRight};`
+              );
+            }
+            if (p.customLayout.paddingTop !== undefined) {
+              const paddingTop = Number(p.customLayout.paddingTop);
+              tableObj.layout.paddingTop = new Function('i',
+                `return ${paddingTop};`
+              );
+            }
+            if (p.customLayout.paddingBottom !== undefined) {
+              const paddingBottom = Number(p.customLayout.paddingBottom);
+              tableObj.layout.paddingBottom = new Function('i',
+                `return ${paddingBottom};`
+              );
+            }
+          }
+        } else if (p.layout === 'custom' && p.customLayout) {
+          // Layout customizado (sem zebra)
+          const customLayout = {};
+
+          // Linhas horizontais
+          // IMPORTANTE: Usar new Function() para que valores sejam literais no código gerado
+          if (p.customLayout.hLineWidth !== undefined) {
+            const hLineWidth = Number(p.customLayout.hLineWidth || 1);
+            customLayout.hLineWidth = new Function('i', 'node',
+              `return ${hLineWidth};`
+            );
+          }
+          if (p.customLayout.hLineColor) {
+            const hLineColor = p.customLayout.hLineColor;
+            customLayout.hLineColor = new Function('i', 'node',
+              `return '${hLineColor}';`
+            );
+          }
+
+          // Linhas verticais
+          if (p.customLayout.vLineWidth !== undefined) {
+            const vLineWidth = Number(p.customLayout.vLineWidth || 1);
+            customLayout.vLineWidth = new Function('i', 'node',
+              `return ${vLineWidth};`
+            );
+          }
+          if (p.customLayout.vLineColor) {
+            const vLineColor = p.customLayout.vLineColor;
+            customLayout.vLineColor = new Function('i', 'node',
+              `return '${vLineColor}';`
+            );
+          }
+
+          // Padding (deve ser função, não valor fixo)
+          // Template oficial: funções simples que retornam valores fixos
+          if (p.customLayout.paddingLeft !== undefined) {
+            const paddingLeft = Number(p.customLayout.paddingLeft);
+            // Template padrão: função simples sem condições
+            customLayout.paddingLeft = new Function('i',
+              `return ${paddingLeft};`
+            );
+          }
+          if (p.customLayout.paddingRight !== undefined) {
+            const paddingRight = Number(p.customLayout.paddingRight);
+            // Template padrão: função simples sem condições
+            customLayout.paddingRight = new Function('i', 'node',
+              `return ${paddingRight};`
+            );
+          }
+          if (p.customLayout.paddingTop !== undefined) {
+            const paddingTop = Number(p.customLayout.paddingTop);
+            customLayout.paddingTop = new Function('i',
+              `return ${paddingTop};`
+            );
+          }
+          if (p.customLayout.paddingBottom !== undefined) {
+            const paddingBottom = Number(p.customLayout.paddingBottom);
+            customLayout.paddingBottom = new Function('i',
+              `return ${paddingBottom};`
+            );
+          }
+
+          // hLineStyle e vLineStyle (dashed)
+          // IMPORTANTE: Usar new Function() para que valores sejam literais no código gerado
+          if (p.customLayout.hLineStyle) {
+            customLayout.hLineStyle = new Function('i', 'node',
+              `if (i === 0 || i === node.table.body.length) {
+            return null;
+        }
+              return { dash: { length: 10, space: 4 } };`
+            );
+          }
+          if (p.customLayout.vLineStyle) {
+            customLayout.vLineStyle = new Function('i', 'node',
+              `if (i === 0 || i === node.table.widths.length) {
+                return null;
+              }
+              return { dash: { length: 4 } };`
+            );
+          }
+
+          // defaultBorder
+          if (p.customLayout.defaultBorder !== undefined) {
+            customLayout.defaultBorder = p.customLayout.defaultBorder;
+          }
+
+          // fillColor para template padrão (quando fillColor é true, significa usar template)
+          if (p.customLayout.fillColor === true) {
+            // Template oficial: fillColor(rowIndex) com cinza #EDEDED somente no header (rowIndex === 0)
+            customLayout.fillColor = new Function('rowIndex',
+              `return rowIndex === 0 ? '#EDEDED' : null;`
+            );
+          }
+
+          if (Object.keys(customLayout).length > 0) {
+            // Layout deve ficar no mesmo nível que table, não dentro de table
+            tableObj.layout = customLayout;
+          }
+        } else if (p.layout && p.layout !== 'custom') {
+          // Layout padrão (string) - também no mesmo nível que table
+          tableObj.layout = p.layout;
+        }
+
+        // Adicionar propriedades extras da tabela
+        // dontBreakRows e keepWithHeaderRows devem estar dentro de table, não no objeto principal
+        if (p.dontBreakRows) tableObj.table.dontBreakRows = true;
+        if (p.keepWithHeaderRows) tableObj.table.keepWithHeaderRows = p.keepWithHeaderRows;
+
+        // headerRows deve ser definido conforme propriedade da tabela ou padrão 1
+        if (p.headerRows !== undefined) {
+          tableObj.table.headerRows = p.headerRows;
+        } else if (body.length > 0) {
+          tableObj.table.headerRows = 1;
+        }
+
+        return tableObj;
+      }
+
+      return { ...common, text: '' };
+    }
+
+    // Processar variáveis dinâmicas em header/footer
+    function processHeaderFooterText(text, currentPage, totalPages) {
+      if (!text) return '';
+      return text
+        .replace(/\{\{pageNumber\}\}/g, currentPage.toString())
+        .replace(/\{\{totalPages\}\}/g, totalPages.toString());
+    }
+
+    function buildDocDefinition() {
+      const root = getRootGroup();
+
+      // Primeiro, coletar estilos das células ANTES de converter para PDFMake
+      const cellStylesMap = new Map();
+      let styleCounter = 0;
+
+      function collectTableCellStyles(element) {
+        if (!element || element.type !== 'table') return;
+        const p = element.properties || {};
+        const body = p.body || [];
+
+        body.forEach(row => {
+          if (Array.isArray(row)) {
+            row.forEach(cell => {
+              if (cell && typeof cell === 'object' && cell.children) {
+                // Coletar propriedades de estilo da célula
+                const styleProps = {};
+                // Verificar propriedades que podem ser estilos
+                // Nota: fillColor, color, fillOpacity são específicos da célula e não devem ser estilos
+                // Mas fontSize, alignment, margin, bold podem ser estilos
+
+                // Coletar do objeto cell diretamente (propriedades da célula)
+                // Essas propriedades vêm do editor de células
+                const cellStyleKey = JSON.stringify({
+                  fontSize: cell.fontSize,
+                  alignment: cell.alignment,
+                  margin: cell.margin,
+                  color: cell.color,
+                  bold: cell.bold,
+                  italics: cell.italics
+                });
+
+                if (!cellStylesMap.has(cellStyleKey) && cell.fontSize) {
+                  const styleName = `tableCellStyle${++styleCounter}`;
+                  const styleObj = {};
+                  if (cell.fontSize) styleObj.fontSize = cell.fontSize;
+                  if (cell.alignment) styleObj.alignment = cell.alignment;
+                  if (cell.margin && Array.isArray(cell.margin)) styleObj.margin = cell.margin;
+                  if (cell.color) styleObj.color = cell.color;
+                  if (cell.bold !== undefined) styleObj.bold = cell.bold;
+                  if (cell.italics !== undefined) styleObj.italics = cell.italics;
+
+                  cellStylesMap.set(cellStyleKey, { name: styleName, props: styleObj });
+                  // Armazenar o nome do estilo na célula para uso posterior
+                  cell._styleName = styleName;
+                } else if (cellStylesMap.has(cellStyleKey)) {
+                  cell._styleName = cellStylesMap.get(cellStyleKey).name;
+                }
+              }
+            });
+          }
+        });
+      }
+
+      // Coletar estilos recursivamente de todas as tabelas
+      function traverseElements(el) {
+        if (!el) return;
+        if (el.type === 'table') {
+          collectTableCellStyles(el);
+        }
+        if (el.properties && el.properties.children) {
+          el.properties.children.forEach(traverseElements);
+        }
+      }
+      traverseElements(root);
+
+      // Agora converter para PDFMake (os estilos já estão marcados nas células)
+      const content = root ? [elementToPdfmake(root)] : [];
+
+      const docDef = {
+        pageSize,
+        pageOrientation: orientation,
+        pageMargins,
+        content
+      };
+
+      // Adicionar estilos coletados ao docDef
+      if (cellStylesMap.size > 0) {
+        docDef.styles = {};
+        cellStylesMap.forEach(({ name, props }) => {
+          docDef.styles[name] = props;
+        });
+      }
+
+      // Adicionar header se configurado (usando container visual)
+      if (documentHeader && documentHeader.enabled && documentHeader.root) {
+        const headerChildren = documentHeader.root.properties.children || [];
+        if (headerChildren.length > 0) {
+          // Converter elementos do header para PDFMake
+          // Passar contexto para processar placeholders corretamente
+          const headerContent = headerChildren.map(el => elementToPdfmake(el, { inHeader: true }));
+
+          // Criar função que retorna o array de conteúdo
+          docDef.header = function (currentPage, pageCount, pageSize) {
+            return headerContent;
+          };
+          // Armazenar conteúdo serializado para uso na geração de código
+          docDef.header._content = headerContent;
+        }
+      }
+
+      // Adicionar footer se configurado (usando container visual)
+      if (documentFooter && documentFooter.enabled && documentFooter.root) {
+        const footerChildren = documentFooter.root.properties.children || [];
+        if (footerChildren.length > 0) {
+          // Converter elementos do footer para PDFMake
+          // Passar contexto para processar placeholders corretamente
+          const footerContent = footerChildren.map(el => elementToPdfmake(el, { inFooter: true }));
+
+          // Criar função que retorna o array de conteúdo
+          docDef.footer = function (currentPage, pageCount, pageSize) {
+            return footerContent;
+          };
+          // Armazenar conteúdo serializado para uso na geração de código
+          docDef.footer._content = footerContent;
+        }
+      }
+
+      // Adicionar watermark se configurado (apenas texto - PDFMake não suporta imagens)
+      if (documentWatermark && documentWatermark.text && documentWatermark.text.trim()) {
+        docDef.watermark = {
+          text: documentWatermark.text,
+          fontSize: documentWatermark.fontSize || 48,
+          color: documentWatermark.color || '#cccccc',
+          opacity: documentWatermark.opacity !== undefined ? documentWatermark.opacity : 0.3,
+          angle: documentWatermark.angle !== undefined ? documentWatermark.angle : -45
+        };
+      }
+
+      // Adicionar TOC se configurado
+      if (documentTOC && documentTOC.enabled) {
+        // O TOC será adicionado no início do content
+        const tocItem = {
+          toc: {
+            title: { text: documentTOC.title || 'Índice', ...(documentTOC.titleStyle || {}) },
+            textStyle: documentTOC.textStyle || {},
+            numberStyle: documentTOC.numberStyle || {},
+            margin: documentTOC.margin || [0, 0, 0, 20]
+          }
+        };
+        docDef.content.unshift(tocItem);
+      }
+
+      // Adicionar Security se configurado
+      if (documentSecurity && documentSecurity.enabled && documentSecurity.userPassword) {
+        docDef.userPassword = documentSecurity.userPassword;
+        if (documentSecurity.ownerPassword) {
+          docDef.ownerPassword = documentSecurity.ownerPassword;
+        }
+        if (documentSecurity.permissions) {
+          docDef.permissions = {
+            printing: documentSecurity.permissions.printing !== false ? 'highResolution' : false,
+            modifying: documentSecurity.permissions.modifying !== false,
+            copying: documentSecurity.permissions.copying !== false,
+            annotating: documentSecurity.permissions.annotating !== false
+          };
+        }
+      }
+
+      // Adicionar Info (Metadados) se configurado
+      if (documentPageInfo && (documentPageInfo.author || documentPageInfo.title || documentPageInfo.subject || documentPageInfo.keywords)) {
+        docDef.info = {};
+        if (documentPageInfo.author) docDef.info.author = documentPageInfo.author;
+        if (documentPageInfo.title) docDef.info.title = documentPageInfo.title;
+        if (documentPageInfo.subject) docDef.info.subject = documentPageInfo.subject;
+        if (documentPageInfo.keywords) docDef.info.keywords = documentPageInfo.keywords;
+      }
+
+      // Adicionar Compress se configurado
+      if (documentCompress) {
+        docDef.compress = true;
+      }
+
+      return docDef;
+    }
+
+
+    // -----------------------
+    // Confirm Modal Helpers
+    // -----------------------
+    let confirmModalCallback = null;
+
+    function showConfirmModal(title, message, callback) {
+      const modal = document.getElementById('confirmModal');
+      const titleEl = document.getElementById('confirmModalTitle');
+      const messageEl = document.getElementById('confirmModalMessage');
+
+      if (!modal || !titleEl || !messageEl) {
+        console.error('Modal de confirmação não encontrado');
+        return;
+      }
+
+      titleEl.textContent = title || 'Confirmar ação';
+      messageEl.textContent = message || 'Tem certeza que deseja realizar esta ação?';
+      confirmModalCallback = callback;
+
+      modal.classList.add('active');
+    }
+    window.showConfirmModal = showConfirmModal; // Tornar global
+
+    function confirmModalAction() {
+      if (confirmModalCallback) {
+        confirmModalCallback();
+      }
+      closeConfirmModal();
+    }
+    window.confirmModalAction = confirmModalAction; // Tornar global para uso no onclick
+
+    function closeConfirmModal() {
+      const modal = document.getElementById('confirmModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+      confirmModalCallback = null;
+    }
+    window.closeConfirmModal = closeConfirmModal; // Tornar global para uso no onclick
+
+    // -----------------------
+    // Alert Modal Helpers
+    // -----------------------
+    function showAlertModal(title, message) {
+      const modal = document.getElementById('alertModal');
+      const titleEl = modal.querySelector('.custom-modal-header h3');
+      const messageEl = document.getElementById('alertModalMessage');
+
+      if (titleEl) titleEl.textContent = title || 'Aviso';
+      if (messageEl) messageEl.textContent = message || 'Mensagem de alerta';
+
+      if (modal) {
+        modal.classList.add('active');
+      }
+    }
+    window.showAlertModal = showAlertModal; // Tornar global
+
+    function closeAlertModal() {
+      const modal = document.getElementById('alertModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+    window.closeAlertModal = closeAlertModal; // Tornar global para uso no onclick
+
+    // Fechar modal de preview do PDF
+    function closePreviewModal() {
+      const modal = document.getElementById('previewModal');
+      const iframe = document.getElementById('previewIframe');
+
+      if (modal) {
+        modal.classList.remove('active');
+      }
+
+      // Limpar o src do iframe para liberar memória
+      if (iframe && iframe.src) {
+        URL.revokeObjectURL(iframe.src);
+        iframe.src = '';
+      }
+    }
+    window.closePreviewModal = closePreviewModal; // Tornar global para uso no onclick
+
+    function closeBubbleTestModal() {
+      const modal = document.getElementById('bubbleTestModal');
+      const iframe = document.getElementById('bubbleTestIframe');
+
+      if (modal) {
+        modal.classList.remove('active');
+      }
+
+      // Limpar o src do iframe
+      if (iframe) {
+        iframe.src = '';
+      }
+    }
+    window.closeBubbleTestModal = closeBubbleTestModal; // Tornar global
+
+    // Funções para controlar modal de loading de código
+    function showLoadingCodeModal() {
+      const modal = document.getElementById('loadingCodeModal');
+      if (modal) {
+        modal.classList.add('active');
+      }
+    }
+
+    function hideLoadingCodeModal() {
+      const modal = document.getElementById('loadingCodeModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+
+    // Fechar modais com ESC
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeConfirmModal();
+        closePreviewModal();
+        closeBubbleTestModal();
+        hideLoadingCodeModal();
+      }
+    });
+
+    // -----------------------
+    // Code tab
+    // -----------------------
+    
+    // Função para coletar apenas as configurações dos elementos (sem gerar código)
+    function getElementConfigurations() {
+      const root = getRootGroup();
+      
+      // Coletar configurações de elementos (deep clone para evitar referências)
+      const cleanedElements = cleanElementsForStorage(elements);
+      
+      return {
+        elements: cleanedElements,
+        pageSize: pageSize,
+        orientation: orientation,
+        pageMargins: pageMargins,
+        documentHeader: documentHeader ? cleanElementForStorageRecursive(documentHeader) : null,
+        documentFooter: documentFooter ? cleanElementForStorageRecursive(documentFooter) : null,
+        documentWatermark: documentWatermark ? cleanElementForStorageRecursive(documentWatermark) : null,
+        documentTOC: documentTOC ? cleanElementForStorageRecursive(documentTOC) : null,
+        documentSecurity: documentSecurity ? cleanElementForStorageRecursive(documentSecurity) : null,
+        documentPageInfo: documentPageInfo ? cleanElementForStorageRecursive(documentPageInfo) : null,
+        documentCompress: documentCompress
+      };
+    }
+
+    // Função para construir objeto dd sem funções (apenas dados serializáveis)
+    function buildDocDefinitionForSerialization() {
+      const dd = buildDocDefinition();
+      
+      // Converter funções em objetos serializáveis
+      // Para header/footer, usar _content se disponível
+      if (dd.header && typeof dd.header === 'function' && dd.header._content) {
+        dd.header = { _isFunction: true, _content: dd.header._content };
+      }
+      if (dd.footer && typeof dd.footer === 'function' && dd.footer._content) {
+        dd.footer = { _isFunction: true, _content: dd.footer._content };
+      }
+      
+      // Para funções em layouts de tabela, precisamos extrair os valores
+      // Isso será feito na Edge Function
+      
+      return dd;
+    }
+
+    // Função para gerar hash do estado atual do editor
+    function generateCurrentEditorStateHash() {
+      const config = getElementConfigurations();
+      return JSON.stringify(config);
+    }
+
+    // Função para gerar código via Edge Function e retornar o código (sem atualizar codeEditor)
+    async function generateCodeViaSupabase() {
+      try {
+        // Gerar hash do estado atual do editor
+        const currentHash = generateCurrentEditorStateHash();
+        
+        // Verificar se o estado não mudou e temos código em cache
+        if (lastGeneratedCode !== null && lastElementsStateHash === currentHash) {
+          console.log('Reutilizando código do Supabase em cache');
+          return lastGeneratedCode;
+        }
+        
+        // Construir objeto dd (sem funções, apenas dados)
+        const dd = buildDocDefinitionForSerialization();
+        
+        // Usar fetch direto para garantir que os headers sejam enviados corretamente
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-pdf-code`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': SUPABASE_ANON_KEY
+          },
+          body: JSON.stringify({ dd: dd })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          // Limpar cache em caso de erro
+          lastGeneratedCode = null;
+          lastElementsStateHash = null;
+          throw new Error(`Erro ${response.status}: ${errorText || response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        if (result && result.code) {
+          // Atualizar cache com o novo código e hash
+          lastGeneratedCode = result.code;
+          lastElementsStateHash = currentHash;
+          
+          // Salvar código gerado no localStorage
+          try {
+            localStorage.setItem(STORAGE_CODE_KEY, result.code);
+          } catch (e) {
+            console.warn('Erro ao salvar código no localStorage:', e);
+          }
+          
+          return result.code;
+        } else {
+          // Limpar cache em caso de resposta inválida
+          lastGeneratedCode = null;
+          lastElementsStateHash = null;
+          throw new Error('Resposta inválida da Edge Function: código não encontrado');
+        }
+      } catch (error) {
+        console.error('Erro ao gerar código:', error);
+        // Limpar cache em caso de erro
+        lastGeneratedCode = null;
+        lastElementsStateHash = null;
+        throw error;
+      }
+    }
+
+    async function generateCodeViaEdgeFunction() {
+      const codeEditor = document.getElementById('codeEditor');
+      if (!codeEditor) return;
+
+      // Mostrar loading
+      codeEditor.textContent = 'Gerando código... Aguarde.';
+      
+      try {
+        const code = await generateCodeViaSupabase();
+        
+        // Exibir código gerado
+        codeEditor.textContent = code;
+      } catch (error) {
+        console.error('Erro ao gerar código:', error);
+        const errorMessage = error.message || 'Erro desconhecido';
+        codeEditor.textContent = `// Erro ao gerar código: ${errorMessage}\n\nPor favor, verifique:\n1. Se a Edge Function está configurada e deployada corretamente\n2. Se a URL da Edge Function está correta\n3. Se há elementos no canvas\n4. Verifique o console para mais detalhes`;
+      }
+    }
+
+    // Função updateCode refatorada - agora chama a Edge Function
+    async function updateCode() {
+      // Verificar se há elementos para gerar código
+      const root = getRootGroup();
+      if (!root || !root.properties || !root.properties.children || root.properties.children.length === 0) {
+        const codeEditor = document.getElementById('codeEditor');
+        if (codeEditor) {
+          codeEditor.textContent = '// Adicione elementos para gerar o código';
+        }
+        return;
+      }
+
+      // Chamar Edge Function para gerar código
+      await generateCodeViaEdgeFunction();
+    }
+
+    // Função antiga mantida para referência (será removida após migração completa)
+    // Esta função contém toda a lógica de serialização que será movida para a Edge Function
+    function updateCode_OLD() {
+      const dd = buildDocDefinition();
+
+      // Mapear funções para seus valores de variáveis locais (para substituição)
+      const functionVariableMap = new Map();
+
+      // Coletar informações sobre funções e suas variáveis locais
+      // Esta função coleta valores de variáveis usadas em funções para substituição na serialização
+      function collectFunctionVariables(obj, path = '') {
+        if (!obj || typeof obj !== 'object') return;
+
+        if (Array.isArray(obj)) {
+          obj.forEach((item, idx) => {
+            collectFunctionVariables(item, `${path}[${idx}]`);
+          });
+        } else {
+          // Verificar se é uma tabela com layout
+          if (obj.table && obj.layout && typeof obj.layout === 'object') {
+            const layout = obj.layout;
+            Object.keys(layout).forEach(key => {
+              if (typeof layout[key] === 'function') {
+                const funcStr = layout[key].toString();
+                const currentPath = `${path}.layout.${key}`;
+
+                // Tentar executar a função para obter valores de retorno
+                try {
+                  // Para fillColor, testar com linha par
+                  if (key === 'fillColor') {
+                    const testResult = layout[key](2, { table: { body: [[], [], []] } });
+                    if (testResult && typeof testResult === 'string') {
+                      functionVariableMap.set(currentPath, {
+                        type: 'fillColor',
+                        color: testResult
+                      });
+                    }
+                  }
+                  // Para padding, testar com diferentes índices
+                  else if (key.startsWith('padding')) {
+                    const testResult = layout[key](1, { table: { widths: ['*', '*'] } });
+                    if (typeof testResult === 'number') {
+                      functionVariableMap.set(currentPath, {
+                        type: 'padding',
+                        value: testResult
+                      });
+                    }
+                  }
+                  // Para hLineWidth, vLineWidth
+                  else if (key.includes('LineWidth')) {
+                    const testResult = layout[key](1, { table: { body: [[], []], widths: ['*', '*'] } });
+                    if (typeof testResult === 'number') {
+                      functionVariableMap.set(currentPath, {
+                        type: 'lineWidth',
+                        value: testResult
+                      });
+                    }
+                  }
+                  // Para hLineColor, vLineColor
+                  else if (key.includes('LineColor')) {
+                    const testResult = layout[key](1, {});
+                    if (typeof testResult === 'string') {
+                      functionVariableMap.set(currentPath, {
+                        type: 'lineColor',
+                        color: testResult
+                      });
+                    }
+                  }
+                } catch (e) {
+                  // Se falhar, tentar usar propriedades armazenadas
+                  if (layout[key]._zebraColor) {
+                    functionVariableMap.set(currentPath, {
+                      type: 'fillColor',
+                      color: layout[key]._zebraColor
+                    });
+                  }
+                }
+              }
+            });
+          }
+
+          Object.keys(obj).forEach(key => {
+            if (key !== 'header' && key !== 'footer') {
+              collectFunctionVariables(obj[key], path ? `${path}.${key}` : key);
+            }
+          });
+        }
+      }
+      collectFunctionVariables(dd);
+
+      // Função recursiva para serializar objeto incluindo funções inline
+      function serializeObject(obj, indent = 0, isInArray = false, currentPath = '') {
+        const indentStr = '  '.repeat(indent);
+        const nextIndent = indent + 1;
+        const nextIndentStr = '  '.repeat(nextIndent);
+
+        if (obj === null) return 'null';
+        if (obj === undefined) return 'undefined';
+
+        // Remover propriedades internas do PDFMake
+        if (typeof obj === 'object' && !Array.isArray(obj) && obj !== null) {
+          const filtered = {};
+          Object.keys(obj).forEach(key => {
+            if (!key.startsWith('_')) {
+              filtered[key] = obj[key];
+            }
+          });
+          obj = filtered;
+        }
+
+        if (Array.isArray(obj)) {
+          if (obj.length === 0) return '[]';
+          let result = '[\n';
+          obj.forEach((item, idx) => {
+            result += nextIndentStr + serializeObject(item, nextIndent, true, `${currentPath}[${idx}]`);
+            if (idx < obj.length - 1) result += ',';
+            result += '\n';
+          });
+          result += indentStr + ']';
+          return result;
+        }
+
+        if (typeof obj === 'function') {
+          // Para header/footer, usar conteúdo serializado armazenado em _content
+          if (obj._content && Array.isArray(obj._content)) {
+            // Serializar o conteúdo como array literal dentro da função
+            // IMPORTANTE: Serializar cada item recursivamente para garantir valores literais
+            let contentStr = '';
+            if (obj._content.length === 0) {
+              contentStr = '[]';
+            } else {
+              const items = [];
+              obj._content.forEach((item, idx) => {
+                const itemStr = serializeObject(item, nextIndent + 1, true, `${currentPath}._content[${idx}]`);
+                items.push(itemStr);
+              });
+              // Formatar array com indentação correta
+              if (items.length === 1 && !items[0].includes('\n')) {
+                // Array de um item simples - uma linha
+                contentStr = `[${items[0]}]`;
+              } else {
+                // Array multi-linha
+                contentStr = '[\n';
+                items.forEach((itemStr, idx) => {
+                  // Adicionar indentação extra para cada item
+                  const lines = itemStr.split('\n');
+                  lines.forEach((line, lineIdx) => {
+                    if (lineIdx === 0) {
+                      contentStr += nextIndentStr + '  ' + line;
+                    } else {
+                      contentStr += '\n' + nextIndentStr + '  ' + line;
+                    }
+                  });
+                  if (idx < items.length - 1) contentStr += ',';
+                  contentStr += '\n';
+                });
+                contentStr += nextIndentStr + ']';
+              }
+            }
+            return `function(currentPage, pageCount, pageSize) {\n${nextIndentStr}return ${contentStr};\n${indentStr}}`;
+          }
+
+          // Serializar função como string de código formatada
+          let funcStr = obj.toString();
+
+          // Obter informações da variável mapeada
+          const varInfo = functionVariableMap.get(currentPath);
+
+          // Substituir variáveis conhecidas por valores literais
+          // 1. Se a função tem propriedade _zebraColor, usar diretamente
+          if (obj._zebraColor) {
+            funcStr = funcStr.replace(/\bzebraColorStr\b|\bzebraColor\b|\bbaseColor\b/g, `'${obj._zebraColor}'`);
+          }
+          // 2. Se temos informação do mapeamento, usar
+          else if (varInfo) {
+            if (varInfo.type === 'fillColor' && varInfo.color) {
+              funcStr = funcStr.replace(/\bzebraColorStr\b|\bzebraColor\b|\bbaseColor\b/g, `'${varInfo.color}'`);
+            } else if (varInfo.type === 'padding' && typeof varInfo.value === 'number') {
+              // Substituir variáveis de padding (paddingLeft, paddingRight, paddingTop, paddingBottom)
+              funcStr = funcStr.replace(/\bpaddingLeft\b|\bpaddingRight\b|\bpaddingTop\b|\bpaddingBottom\b/g, varInfo.value.toString());
+            } else if (varInfo.type === 'lineWidth' && typeof varInfo.value === 'number') {
+              // Substituir variáveis de lineWidth
+              funcStr = funcStr.replace(/\bhLineWidth\b|\bvLineWidth\b/g, varInfo.value.toString());
+            } else if (varInfo.type === 'lineColor' && varInfo.color) {
+              // Substituir variáveis de lineColor
+              funcStr = funcStr.replace(/\bhLineColor\b|\bvLineColor\b/g, `'${varInfo.color}'`);
+            }
+          }
+          // 3. Tentar executar a função para obter valores
+          else {
+            try {
+              // Para fillColor
+              if (funcStr.includes('fillColor') || funcStr.includes('zebraColor') || funcStr.includes('baseColor')) {
+                const testResult = obj(2, { table: { body: [[], [], []] } });
+                if (testResult && typeof testResult === 'string' && testResult.match(/^#[0-9A-Fa-f]{6}$/)) {
+                  funcStr = funcStr.replace(/\bzebraColorStr\b|\bzebraColor\b|\bbaseColor\b/g, `'${testResult}'`);
+                }
+              }
+              // Para padding
+              else if (funcStr.includes('padding')) {
+                const testResult = obj(1, { table: { widths: ['*', '*'] } });
+                if (typeof testResult === 'number') {
+                  // Encontrar o nome da variável de padding no código
+                  const paddingMatch = funcStr.match(/\b(paddingLeft|paddingRight|paddingTop|paddingBottom)\b/);
+                  if (paddingMatch) {
+                    funcStr = funcStr.replace(new RegExp(`\\b${paddingMatch[1]}\\b`, 'g'), testResult.toString());
+                  }
+                }
+              }
+              // Para lineWidth
+              else if (funcStr.includes('LineWidth')) {
+                const testResult = obj(1, { table: { body: [[], []], widths: ['*', '*'] } });
+                if (typeof testResult === 'number') {
+                  const lineWidthMatch = funcStr.match(/\b(hLineWidth|vLineWidth)\b/);
+                  if (lineWidthMatch) {
+                    funcStr = funcStr.replace(new RegExp(`\\b${lineWidthMatch[1]}\\b`, 'g'), testResult.toString());
+                  }
+                }
+              }
+              // Para lineColor
+              else if (funcStr.includes('LineColor')) {
+                const testResult = obj(1, {});
+                if (typeof testResult === 'string') {
+                  const lineColorMatch = funcStr.match(/\b(hLineColor|vLineColor)\b/);
+                  if (lineColorMatch) {
+                    funcStr = funcStr.replace(new RegExp(`\\b${lineColorMatch[1]}\\b`, 'g'), `'${testResult}'`);
+                  }
+                }
+              }
+            } catch (e) {
+              // Ignorar erro - função pode não ser executável neste contexto
+            }
+          }
+
+          // Substituição final: procurar padrões comuns de variáveis
+          // Padrão: return (i % 2 === 0) ? zebraColorStr : null;
+          const returnMatch = funcStr.match(/return\s*\([^)]+\)\s*\?\s*(\w+)\s*:/);
+          if (returnMatch) {
+            const varName = returnMatch[1];
+            // Se ainda não foi substituído, tentar obter do mapeamento ou propriedade
+            if (funcStr.includes(varName)) {
+              const value = obj._zebraColor || functionVariableMap.get(currentPath)?.color || functionVariableMap.get(currentPath)?.value;
+              if (value !== undefined) {
+                const replacement = typeof value === 'string' ? `'${value}'` : value.toString();
+                funcStr = funcStr.replace(new RegExp(`\\b${varName}\\b`, 'g'), replacement);
+              }
+            }
+          }
+
+          // Remover quebras de linha extras e formatar com indentação correta
+          // Se a função foi criada com new Function(), ela já tem o formato correto
+          // Se foi criada com function(), precisa ser formatada
+          const lines = funcStr.split('\n').filter(line => line.trim() !== '');
+          if (lines.length > 1) {
+            // Função multi-linha - formatar com indentação
+            let formatted = lines[0].trim() + '\n';
+            for (let i = 1; i < lines.length - 1; i++) {
+              const line = lines[i].trim();
+              // Adicionar indentação extra para o corpo da função
+              formatted += nextIndentStr + '  ' + line + '\n';
+            }
+            if (lines.length > 1) {
+              formatted += nextIndentStr + lines[lines.length - 1].trim();
+            }
+            return formatted;
+          }
+          // Função de uma linha - manter como está
+          return funcStr;
+        }
+
+        if (typeof obj === 'string') {
+          // Escapar caracteres especiais e usar template literals se necessário
+          if (obj.includes('${') || obj.includes('`')) {
+            // Usar template literal
+            const escaped = obj.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+            return '`' + escaped + '`';
+          }
+          // Usar string normal
+          const escaped = obj
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/\t/g, '\\t');
+          return `'${escaped}'`;
+        }
+
+        if (typeof obj === 'object' && obj !== null) {
+          const keys = Object.keys(obj);
+          if (keys.length === 0) return '{}';
+
+          let result = '{\n';
+          let validKeys = keys.filter(key => {
+            // Filtrar propriedades internas e undefined
+            if (key.startsWith('_')) return false;
+            const value = obj[key];
+            // Não incluir propriedades undefined (mas incluir null)
+            if (value === undefined) return false;
+            return true;
+          });
+
+          validKeys.forEach((key, idx) => {
+            const value = obj[key];
+
+            // Validar nome da chave (não pode começar com número ou ter caracteres especiais problemáticos)
+            const safeKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
+
+            // Limpar widths se for array
+            if (key === 'widths' && Array.isArray(value)) {
+              const cleanedWidths = value.map(w => {
+                if (typeof w === 'object' && w !== null) {
+                  if (w.width !== undefined) return w.width;
+                  return '*';
+                }
+                return w;
+              });
+              result += nextIndentStr + `${safeKey}: ${JSON.stringify(cleanedWidths)}`;
+            } else {
+              const newPath = currentPath ? `${currentPath}.${key}` : key;
+              const serialized = serializeObject(value, nextIndent, false, newPath);
+              result += nextIndentStr + `${safeKey}: ${serialized}`;
+            }
+
+            if (idx < validKeys.length - 1) result += ',';
+            result += '\n';
+          });
+          result += indentStr + '}';
+          return result;
+        }
+
+        // Números, booleanos, etc.
+        return JSON.stringify(obj);
+      }
+
+      // Construir código completo com tudo dentro do objeto dd
+      let code = 'const dd = ' + serializeObject(dd, 0, false, 'dd') + ';\n';
+
+      codeEditor.textContent = code;
+
+      // Salvar código gerado no localStorage
+      try {
+        localStorage.setItem(STORAGE_CODE_KEY, code);
+      } catch (e) {
+        console.warn('Erro ao salvar código no localStorage:', e);
+      }
+    }
+
+    function copyCode() {
+      const text = codeEditor.textContent || '';
+      navigator.clipboard.writeText(text).then(() => {
+        if (!copyBtn) return;
+        copyBtn.classList.add('copied');
+        copyBtn.textContent = '✅ Copiado';
+        setTimeout(() => {
+          copyBtn.classList.remove('copied');
+          copyBtn.textContent = '📋 Copiar';
+        }, 1200);
+      });
+    }
+    window.copyCode = copyCode;
+
+    // -----------------------
+    // Tabs (editor/code) - already in layout
+    // -----------------------
+    function switchTab(tab) {
+      const tabEditorBtn = document.getElementById('tabEditor');
+      const tabPageBtn = document.getElementById('tabPage');
+      const tabCodeBtn = document.getElementById('tabCode');
+      const contentEditor = document.getElementById('tabContentEditor');
+      const contentPage = document.getElementById('tabContentPage');
+      const contentCode = document.getElementById('tabContentCode');
+
+      // If trying to switch to 'code' tab and no elements exist, prevent it
+      if (tab === 'code' && !hasAnyValidElements()) {
+        showAlertModal('Aviso', 'Adicione pelo menos um elemento ao canvas para visualizar o código.');
+        return; // Prevent tab switch
+      }
+
+      // Remover active de todos
+      [tabEditorBtn, tabPageBtn, tabCodeBtn].forEach(btn => btn?.classList.remove('active'));
+      [contentEditor, contentPage, contentCode].forEach(content => content?.classList.remove('active'));
+
+      if (tab === 'code') {
+        tabCodeBtn.classList.add('active');
+        contentCode.classList.add('active');
+        updateCode();
+      } else if (tab === 'page') {
+        tabPageBtn.classList.add('active');
+        contentPage.classList.add('active');
+        renderPageInspector();
+      } else {
+        tabEditorBtn.classList.add('active');
+        contentEditor.classList.add('active');
+      }
+    }
+
+    // Renderizar Page Inspector (combina TOC, Header/Footer e Watermark)
+    function renderPageInspector() {
+      const inspector = document.getElementById('pageInspector');
+      if (!inspector) return;
+
+      // Combinar os 3 conteúdos em uma única página
+      inspector.innerHTML = `
+        <!-- Seção 1: Índice (TOC) -->
+        <div style="margin-bottom: 2rem;">
+          <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #2563eb;">📑 Índice (Table of Contents)</h3>
+          <div class="inspector-field">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+              <input type="checkbox" id="tocEnabled" ${documentTOC?.enabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Habilitar Índice</span>
+            </label>
+            <div class="smallNote">Marque elementos como "TOC" no editor para incluí-los no índice</div>
+          </div>
+          <div id="tocOptions" style="${documentTOC?.enabled ? '' : 'display: none;'}">
+            <div class="inspector-field">
+              <label>Título do Índice</label>
+              <input type="text" id="tocTitle" value="${escapeHtml(documentTOC?.title || 'Índice')}">
+            </div>
+            <div class="inspector-field">
+              <div class="smallNote" style="padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: #1e40af;">
+                <strong>💡 Como usar:</strong><br>
+                • Selecione um elemento (text, header) no canvas<br>
+                • No editor, marque a opção "Incluir no Índice"<br>
+                • O elemento aparecerá automaticamente no índice
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Separador -->
+        <div style="margin: 2rem 0; border-top: 1px solid #e5e7eb;"></div>
+        
+        <!-- Seção 2: Header/Footer -->
+        <div style="margin-bottom: 2rem;">
+          <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #2563eb;">📄 Cabeçalho e Rodapé</h3>
+          
+          <!-- Header Toggle -->
+          <div class="inspector-field">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+              <input type="checkbox" id="headerEnabled" ${documentHeader?.enabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Ativar Cabeçalho</span>
+            </label>
+            <div class="smallNote">Quando ativado, uma área de cabeçalho aparecerá no topo do canvas. Arraste elementos para dentro dela.</div>
+          </div>
+          
+          <div id="headerOptions" style="${documentHeader?.enabled ? '' : 'display: none;'}">
+            <div class="inspector-field">
+              <label class="smallNote">Altura Estimada (px)</label>
+              <input type="number" id="headerHeight" value="${documentHeader?.height || 60}" min="20" max="200">
+              <div class="smallNote">Usado para calcular as margens da página automaticamente</div>
+            </div>
+            <div class="inspector-field">
+              <div class="smallNote" style="padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: #1e40af;">
+                <strong>💡 Dica:</strong> Arraste um elemento de texto para o cabeçalho e use <code>{{pageNumber}}</code> para número da página atual e <code>{{totalPages}}</code> para total de páginas. Exemplo: "Página {{pageNumber}} de {{totalPages}}"
+              </div>
+            </div>
+            <div class="inspector-field">
+              <button type="button" onclick="clearHeader()" style="width: 100%; padding: 0.75rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer;">
+                🗑️ Limpar Cabeçalho
+              </button>
+            </div>
+          </div>
+          
+          <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+            <!-- Footer Toggle -->
+            <div class="inspector-field">
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="footerEnabled" ${documentFooter?.enabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Ativar Rodapé</span>
+              </label>
+              <div class="smallNote">Quando ativado, uma área de rodapé aparecerá na parte inferior do canvas. Arraste elementos para dentro dela.</div>
+            </div>
+            
+            <div id="footerOptions" style="${documentFooter?.enabled ? '' : 'display: none;'}">
+              <div class="inspector-field">
+                <label class="smallNote">Altura Estimada (px)</label>
+                <input type="number" id="footerHeight" value="${documentFooter?.height || 60}" min="20" max="200">
+                <div class="smallNote">Usado para calcular as margens da página automaticamente</div>
+              </div>
+              <div class="inspector-field">
+                <div class="smallNote" style="padding: 0.75rem; background: #dbeafe; border-left: 3px solid #2563eb; margin-bottom: 1rem; border-radius: 0.25rem; color: #1e40af;">
+                  <strong>💡 Dica:</strong> Arraste um elemento de texto para o rodapé e use <code>{{pageNumber}}</code> para número da página atual e <code>{{totalPages}}</code> para total de páginas. Exemplo: "Página {{pageNumber}} de {{totalPages}}"
+                </div>
+              </div>
+              <div class="inspector-field">
+                <button type="button" onclick="clearFooter()" style="width: 100%; padding: 0.75rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer;">
+                  🗑️ Limpar Rodapé
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Separador -->
+        <div style="margin: 2rem 0; border-top: 1px solid #e5e7eb;"></div>
+        
+        <!-- Seção 3: Watermark -->
+        <div>
+          <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #2563eb;">💧 Marca d'Água (Watermark)</h3>
+          <div class="inspector-field">
+            <label>Texto da Marca d'Água</label>
+            <input type="text" id="watermarkText" value="${escapeHtml(documentWatermark?.text || '')}" placeholder="Ex: CONFIDENCIAL">
+            <div class="smallNote">Deixe vazio para desabilitar a marca d'água</div>
+          </div>
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">Tamanho da Fonte</label>
+                <input type="number" id="watermarkFontSize" value="${documentWatermark?.fontSize || 48}" min="12" max="200">
+              </div>
+              <div>
+                <label class="smallNote">Cor</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <input type="color" id="watermarkColor" value="${documentWatermark?.color || '#cccccc'}" style="width: 50px; height: 32px; cursor: pointer;">
+                  <input type="text" id="watermarkColorText" value="${documentWatermark?.color || '#cccccc'}" placeholder="#cccccc" style="flex: 1; font-size: 0.875rem;">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">Opacidade (0.0 - 1.0)</label>
+                <input type="number" id="watermarkOpacity" value="${documentWatermark?.opacity || 0.3}" min="0" max="1" step="0.1">
+              </div>
+              <div>
+                <label class="smallNote">Ângulo (graus)</label>
+                <input type="number" id="watermarkAngle" value="${documentWatermark?.angle || -45}" min="-180" max="180" step="1">
+              </div>
+            </div>
+          </div>
+          <div class="inspector-field">
+            <button type="button" onclick="clearWatermark()" style="width: 100%; padding: 0.75rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer;">
+              🗑️ Remover Marca d'Água
+            </button>
+          </div>
+        </div>
+        
+        <!-- Separador -->
+        <div style="margin: 2rem 0; border-top: 1px solid #e5e7eb;"></div>
+        
+        <!-- Seção 4: Security -->
+        <div>
+          <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #2563eb;">🔒 Segurança do PDF</h3>
+          <div class="inspector-field">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+              <input type="checkbox" id="securityEnabled" ${documentSecurity?.enabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Habilitar Proteção por Senha</span>
+            </label>
+            <div class="smallNote">Adicione senhas e permissões para proteger o PDF</div>
+          </div>
+          <div id="securityOptions" style="${documentSecurity?.enabled ? '' : 'display: none;'}">
+            <div class="inspector-field">
+              <label>Senha do Usuário</label>
+              <input type="password" id="securityUserPassword" value="${escapeHtml(documentSecurity?.userPassword || '')}" placeholder="Senha para abrir o PDF">
+              <div class="smallNote">Senha necessária para abrir e visualizar o PDF</div>
+            </div>
+            <div class="inspector-field">
+              <label>Senha do Proprietário</label>
+              <input type="password" id="securityOwnerPassword" value="${escapeHtml(documentSecurity?.ownerPassword || '')}" placeholder="Senha para modificar permissões">
+              <div class="smallNote">Senha para modificar permissões (deixe vazio para usar a mesma senha do usuário)</div>
+            </div>
+            <div class="inspector-field">
+              <label style="margin-bottom: 0.75rem; display: block; font-weight: 500;">Permissões</label>
+              <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="securityPrinting" ${documentSecurity?.permissions?.printing !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Permitir Impressão</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="securityModifying" ${documentSecurity?.permissions?.modifying !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Permitir Modificação</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="securityCopying" ${documentSecurity?.permissions?.copying !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Permitir Cópia</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                  <input type="checkbox" id="securityAnnotating" ${documentSecurity?.permissions?.annotating !== false ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                  <span>Permitir Anotações</span>
+                </label>
+              </div>
+            </div>
+            <div class="inspector-field">
+              <div class="smallNote" style="padding: 0.75rem; background: #fef3c7; border-left: 3px solid #f59e0b; margin-bottom: 1rem; border-radius: 0.25rem; color: #92400e;">
+                <strong>⚠️ Aviso:</strong> As senhas não podem ser recuperadas. Certifique-se de guardá-las em local seguro.
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Separador -->
+        <div style="margin: 2rem 0; border-top: 1px solid #e5e7eb;"></div>
+        
+        <!-- Seção 5: Metadados e Compressão -->
+        <div>
+          <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #2563eb;">📋 Metadados do PDF</h3>
+          <div class="inspector-field">
+            <label>Autor</label>
+            <input type="text" id="pageInfoAuthor" value="${escapeHtml(documentPageInfo?.author || '')}" placeholder="Nome do autor">
+          </div>
+          <div class="inspector-field">
+            <label>Título</label>
+            <input type="text" id="pageInfoTitle" value="${escapeHtml(documentPageInfo?.title || '')}" placeholder="Título do documento">
+          </div>
+          <div class="inspector-field">
+            <label>Assunto</label>
+            <input type="text" id="pageInfoSubject" value="${escapeHtml(documentPageInfo?.subject || '')}" placeholder="Assunto do documento">
+          </div>
+          <div class="inspector-field">
+            <label>Palavras-chave</label>
+            <input type="text" id="pageInfoKeywords" value="${escapeHtml(documentPageInfo?.keywords || '')}" placeholder="palavra1, palavra2, palavra3">
+            <div class="smallNote">Separe múltiplas palavras-chave com vírgulas</div>
+          </div>
+          
+          <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+            <h4 style="margin-bottom: 0.75rem; font-size: 1rem; font-weight: 500; color: #374151;">Compressão</h4>
+            <div class="inspector-field">
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+                <input type="checkbox" id="pageCompress" ${documentCompress ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                <span>Comprimir PDF</span>
+              </label>
+              <div class="smallNote">Reduz o tamanho do arquivo PDF gerado (pode aumentar o tempo de geração)</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Attach todos os listeners
+      attachTOCListeners();
+      attachHeaderFooterListeners();
+      attachWatermarkListeners();
+      attachSecurityListeners();
+      attachPageInfoListeners();
+    }
+
+    // Attach listeners para TOC
+    function attachTOCListeners() {
+      const tocEnabled = document.getElementById('tocEnabled');
+      const tocTitle = document.getElementById('tocTitle');
+      const tocOptions = document.getElementById('tocOptions');
+
+      if (tocEnabled) {
+        tocEnabled.addEventListener('change', () => {
+          if (!documentTOC) documentTOC = {};
+          documentTOC.enabled = tocEnabled.checked;
+          if (tocOptions) tocOptions.style.display = documentTOC.enabled ? '' : 'none';
+        });
+      }
+
+      if (tocTitle) {
+        tocTitle.addEventListener('input', () => {
+          if (!documentTOC) documentTOC = {};
+          documentTOC.title = tocTitle.value.trim() || 'Índice';
+        });
+      }
+    }
+
+    // Attach listeners para Watermark (apenas texto)
+    function attachWatermarkListeners() {
+      const watermarkText = document.getElementById('watermarkText');
+      const watermarkFontSize = document.getElementById('watermarkFontSize');
+      const watermarkColor = document.getElementById('watermarkColor');
+      const watermarkColorText = document.getElementById('watermarkColorText');
+      const watermarkOpacity = document.getElementById('watermarkOpacity');
+      const watermarkAngle = document.getElementById('watermarkAngle');
+
+      if (watermarkText) {
+        watermarkText.addEventListener('input', () => {
+          const text = watermarkText.value.trim();
+          if (text) {
+            if (!documentWatermark) documentWatermark = {};
+            documentWatermark.text = text;
+          } else {
+            documentWatermark = null;
+          }
+        });
+      }
+
+      if (watermarkFontSize) {
+        watermarkFontSize.addEventListener('input', () => {
+          if (!documentWatermark) documentWatermark = {};
+          documentWatermark.fontSize = parseInt(watermarkFontSize.value) || 48;
+        });
+      }
+
+      if (watermarkColor && watermarkColorText) {
+        watermarkColor.addEventListener('input', () => {
+          watermarkColorText.value = watermarkColor.value;
+          if (!documentWatermark) documentWatermark = {};
+          documentWatermark.color = watermarkColor.value;
+        });
+        watermarkColorText.addEventListener('input', () => {
+          if (/^#[0-9A-F]{6}$/i.test(watermarkColorText.value)) {
+            watermarkColor.value = watermarkColorText.value;
+            if (!documentWatermark) documentWatermark = {};
+            documentWatermark.color = watermarkColorText.value;
+          }
+        });
+      }
+
+      if (watermarkOpacity) {
+        watermarkOpacity.addEventListener('input', () => {
+          if (!documentWatermark) documentWatermark = {};
+          documentWatermark.opacity = parseFloat(watermarkOpacity.value) || 0.3;
+        });
+      }
+
+      if (watermarkAngle) {
+        watermarkAngle.addEventListener('input', () => {
+          if (!documentWatermark) documentWatermark = {};
+          documentWatermark.angle = parseInt(watermarkAngle.value) || -45;
+        });
+      }
+    }
+
+    function clearWatermark() {
+      documentWatermark = null;
+      renderPageInspector();
+    }
+    window.clearWatermark = clearWatermark;
+
+    // Attach listeners para Security
+    function attachSecurityListeners() {
+      const securityEnabled = document.getElementById('securityEnabled');
+      const securityUserPassword = document.getElementById('securityUserPassword');
+      const securityOwnerPassword = document.getElementById('securityOwnerPassword');
+      const securityPrinting = document.getElementById('securityPrinting');
+      const securityModifying = document.getElementById('securityModifying');
+      const securityCopying = document.getElementById('securityCopying');
+      const securityAnnotating = document.getElementById('securityAnnotating');
+      const securityOptions = document.getElementById('securityOptions');
+
+      if (securityEnabled) {
+        securityEnabled.addEventListener('change', () => {
+          if (!documentSecurity) documentSecurity = {};
+          documentSecurity.enabled = securityEnabled.checked;
+          if (securityOptions) securityOptions.style.display = documentSecurity.enabled ? '' : 'none';
+          if (!documentSecurity.enabled) documentSecurity = null;
+        });
+      }
+
+      if (securityUserPassword) {
+        securityUserPassword.addEventListener('input', () => {
+          if (!documentSecurity) documentSecurity = {};
+          documentSecurity.userPassword = securityUserPassword.value;
+          if (!documentSecurity.userPassword && !documentSecurity.ownerPassword) documentSecurity = null;
+        });
+      }
+
+      if (securityOwnerPassword) {
+        securityOwnerPassword.addEventListener('input', () => {
+          if (!documentSecurity) documentSecurity = {};
+          documentSecurity.ownerPassword = securityOwnerPassword.value;
+        });
+      }
+
+      if (securityPrinting) {
+        securityPrinting.addEventListener('change', () => {
+          if (!documentSecurity) documentSecurity = {};
+          if (!documentSecurity.permissions) documentSecurity.permissions = {};
+          documentSecurity.permissions.printing = securityPrinting.checked;
+        });
+      }
+
+      if (securityModifying) {
+        securityModifying.addEventListener('change', () => {
+          if (!documentSecurity) documentSecurity = {};
+          if (!documentSecurity.permissions) documentSecurity.permissions = {};
+          documentSecurity.permissions.modifying = securityModifying.checked;
+        });
+      }
+
+      if (securityCopying) {
+        securityCopying.addEventListener('change', () => {
+          if (!documentSecurity) documentSecurity = {};
+          if (!documentSecurity.permissions) documentSecurity.permissions = {};
+          documentSecurity.permissions.copying = securityCopying.checked;
+        });
+      }
+
+      if (securityAnnotating) {
+        securityAnnotating.addEventListener('change', () => {
+          if (!documentSecurity) documentSecurity = {};
+          if (!documentSecurity.permissions) documentSecurity.permissions = {};
+          documentSecurity.permissions.annotating = securityAnnotating.checked;
+        });
+      }
+    }
+
+    // Attach listeners para Page Info (Metadados) e Compress
+    function attachPageInfoListeners() {
+      const pageInfoAuthor = document.getElementById('pageInfoAuthor');
+      const pageInfoTitle = document.getElementById('pageInfoTitle');
+      const pageInfoSubject = document.getElementById('pageInfoSubject');
+      const pageInfoKeywords = document.getElementById('pageInfoKeywords');
+      const pageCompress = document.getElementById('pageCompress');
+
+      if (pageInfoAuthor) {
+        pageInfoAuthor.addEventListener('input', () => {
+          if (!documentPageInfo) documentPageInfo = {};
+          documentPageInfo.author = pageInfoAuthor.value.trim();
+          if (!documentPageInfo.author && !documentPageInfo.title && !documentPageInfo.subject && !documentPageInfo.keywords) {
+            documentPageInfo = null;
+          }
+        });
+      }
+
+      if (pageInfoTitle) {
+        pageInfoTitle.addEventListener('input', () => {
+          if (!documentPageInfo) documentPageInfo = {};
+          documentPageInfo.title = pageInfoTitle.value.trim();
+          if (!documentPageInfo.author && !documentPageInfo.title && !documentPageInfo.subject && !documentPageInfo.keywords) {
+            documentPageInfo = null;
+          }
+        });
+      }
+
+      if (pageInfoSubject) {
+        pageInfoSubject.addEventListener('input', () => {
+          if (!documentPageInfo) documentPageInfo = {};
+          documentPageInfo.subject = pageInfoSubject.value.trim();
+          if (!documentPageInfo.author && !documentPageInfo.title && !documentPageInfo.subject && !documentPageInfo.keywords) {
+            documentPageInfo = null;
+          }
+        });
+      }
+
+      if (pageInfoKeywords) {
+        pageInfoKeywords.addEventListener('input', () => {
+          if (!documentPageInfo) documentPageInfo = {};
+          documentPageInfo.keywords = pageInfoKeywords.value.trim();
+          if (!documentPageInfo.author && !documentPageInfo.title && !documentPageInfo.subject && !documentPageInfo.keywords) {
+            documentPageInfo = null;
+          }
+        });
+      }
+
+      if (pageCompress) {
+        pageCompress.addEventListener('change', () => {
+          documentCompress = pageCompress.checked;
+        });
+      }
+    }
+
+    // Função antiga mantida para compatibilidade (não será mais usada)
+    function renderHeaderFooterInspector() {
+      const inspector = document.getElementById('headerFooterInspector');
+      if (!inspector) return;
+
+      inspector.innerHTML = `
+        <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #111827;">Cabeçalho da Página</h3>
+        <div class="inspector-field">
+          <label>Texto do Cabeçalho</label>
+          <textarea id="headerText" placeholder="Ex: Título do Documento ou deixe vazio para desabilitar" style="min-height: 60px;">${escapeHtml(documentHeader?.text || '')}</textarea>
+          <div class="smallNote">Use {{pageNumber}} para número da página atual e {{totalPages}} para total de páginas</div>
+              </div>
+        <div class="inspector-field">
+          <div class="row">
+            <div>
+              <label class="smallNote">Tamanho da Fonte</label>
+              <input type="number" id="headerFontSize" value="${documentHeader?.fontSize || 10}" min="6" max="24">
+            </div>
+            <div>
+              <label class="smallNote">Alinhamento</label>
+              <select id="headerAlignment">
+                <option value="left" ${documentHeader?.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+                <option value="center" ${documentHeader?.alignment === 'center' || !documentHeader ? 'selected' : ''}>Centro</option>
+                <option value="right" ${documentHeader?.alignment === 'right' ? 'selected' : ''}>Direita</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="inspector-field">
+          <label class="smallNote">Cor do Texto</label>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="color" id="headerColor" value="${documentHeader?.color || '#000000'}" style="width: 60px; height: 38px; cursor: pointer;">
+            <input type="text" id="headerColorText" value="${documentHeader?.color || '#000000'}" placeholder="#000000" style="flex: 1;">
+          </div>
+        </div>
+        
+        <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+          <h3 style="margin-bottom: 1rem; font-size: 1.125rem; font-weight: 600; color: #111827;">Rodapé da Página</h3>
+          <div class="inspector-field">
+            <label>Texto do Rodapé</label>
+            <textarea id="footerText" placeholder="Ex: Página {{pageNumber}} de {{totalPages}} ou deixe vazio para desabilitar" style="min-height: 60px;">${escapeHtml(documentFooter?.text || '')}</textarea>
+            <div class="smallNote">Use {{pageNumber}} para número da página atual e {{totalPages}} para total de páginas</div>
+          </div>
+          <div class="inspector-field">
+            <div class="row">
+              <div>
+                <label class="smallNote">Tamanho da Fonte</label>
+                <input type="number" id="footerFontSize" value="${documentFooter?.fontSize || 10}" min="6" max="24">
+              </div>
+              <div>
+                <label class="smallNote">Alinhamento</label>
+                <select id="footerAlignment">
+                  <option value="left" ${documentFooter?.alignment === 'left' ? 'selected' : ''}>Esquerda</option>
+                  <option value="center" ${documentFooter?.alignment === 'center' || !documentFooter ? 'selected' : ''}>Centro</option>
+                  <option value="right" ${documentFooter?.alignment === 'right' ? 'selected' : ''}>Direita</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="inspector-field">
+            <label class="smallNote">Cor do Texto</label>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <input type="color" id="footerColor" value="${documentFooter?.color || '#000000'}" style="width: 60px; height: 38px; cursor: pointer;">
+              <input type="text" id="footerColorText" value="${documentFooter?.color || '#000000'}" placeholder="#000000" style="flex: 1;">
+            </div>
+              </div>
+            </div>
+          `;
+
+      // Attach listeners após renderizar
+      attachHeaderFooterListeners();
+    }
+
+    // Attach listeners para Header/Footer
+    function attachHeaderFooterListeners() {
+      // Header Toggle
+      const headerEnabled = document.getElementById('headerEnabled');
+      const headerHeight = document.getElementById('headerHeight');
+      const headerOptions = document.getElementById('headerOptions');
+
+      if (headerEnabled) {
+        headerEnabled.addEventListener('change', () => {
+          documentHeader.enabled = headerEnabled.checked;
+          if (!documentHeader.root) {
+            documentHeader.root = createHeaderFooterRoot();
+          }
+          if (headerOptions) {
+            headerOptions.style.display = documentHeader.enabled ? '' : 'none';
+          }
+          adjustPageMargins();
+          renderAll();
+          saveState();
+        });
+      }
+
+      if (headerHeight) {
+        headerHeight.addEventListener('input', () => {
+          documentHeader.height = parseInt(headerHeight.value) || 60;
+          adjustPageMargins();
+        });
+      }
+
+      // Footer Toggle
+      const footerEnabled = document.getElementById('footerEnabled');
+      const footerHeight = document.getElementById('footerHeight');
+      const footerOptions = document.getElementById('footerOptions');
+
+      if (footerEnabled) {
+        footerEnabled.addEventListener('change', () => {
+          documentFooter.enabled = footerEnabled.checked;
+          if (!documentFooter.root) {
+            documentFooter.root = createHeaderFooterRoot();
+          }
+          if (footerOptions) {
+            footerOptions.style.display = documentFooter.enabled ? '' : 'none';
+          }
+          adjustPageMargins();
+          renderAll();
+          saveState();
+        });
+      }
+
+      if (footerHeight) {
+        footerHeight.addEventListener('input', () => {
+          documentFooter.height = parseInt(footerHeight.value) || 60;
+          adjustPageMargins();
+        });
+      }
+    }
+
+    // Funções para limpar header/footer
+    function clearHeader() {
+      showConfirmModal(
+        'Limpar Cabeçalho',
+        'Tem certeza que deseja limpar todo o conteúdo do cabeçalho?',
+        () => {
+          documentHeader.root = createHeaderFooterRoot();
+          renderAll();
+          saveState();
+        }
+      );
+    }
+    window.clearHeader = clearHeader;
+
+    function clearFooter() {
+      showConfirmModal(
+        'Limpar Rodapé',
+        'Tem certeza que deseja limpar todo o conteúdo do rodapé?',
+        () => {
+          documentFooter.root = createHeaderFooterRoot();
+          renderAll();
+          saveState();
+        }
+      );
+    }
+    window.clearFooter = clearFooter;
+
+    // Ajustar pageMargins baseado na altura do header/footer
+    function adjustPageMargins() {
+      const minTopMargin = documentHeader.enabled ? documentHeader.height + 20 : 60;
+      const minBottomMargin = documentFooter.enabled ? documentFooter.height + 20 : 60;
+
+      // Ajustar apenas se necessário
+      if (pageMargins[1] < minTopMargin) {
+        pageMargins[1] = minTopMargin;
+        if (mT) mT.value = minTopMargin;
+      }
+      if (pageMargins[3] < minBottomMargin) {
+        pageMargins[3] = minBottomMargin;
+        if (mB) mB.value = minBottomMargin;
+      }
+    }
+    window.switchTab = switchTab;
+
+    // -----------------------
+    // UI bindings
+    // -----------------------
+    // Função para contar elementos válidos (grupos vazios não contam, mas grupos com elementos dentro contam)
+    function countValidElements(el) {
+      if (!el) return 0;
+
+      // Se não é grupo, conta como 1 elemento válido
+      if (el.type !== 'group') {
+        return 1;
+      }
+
+      // Se é grupo, verifica se tem filhos válidos
+      const children = el.properties?.children || [];
+      if (children.length === 0) {
+        return 0; // Grupo vazio não conta
+      }
+
+      // Conta elementos válidos dentro do grupo
+      let count = 0;
+      for (const child of children) {
+        count += countValidElements(child);
+      }
+
+      return count;
+    }
+
+    // NEW FUNCTION: Check if any valid element exists in the canvas (main, header, or footer)
+    function hasAnyValidElements() {
+      const rootGroup = getRootGroup();
+      let totalValidElements = 0;
+
+      // Contar elementos do grupo raiz
+      if (rootGroup) {
+        totalValidElements += countValidElements(rootGroup);
+      }
+
+      // Contar elementos do header (apenas se estiver habilitado)
+      if (documentHeader.enabled && documentHeader.root) {
+        const headerChildren = documentHeader.root.properties?.children || [];
+        for (const child of headerChildren) {
+          totalValidElements += countValidElements(child);
+        }
+      }
+
+      // Contar elementos do footer (apenas se estiver habilitado)
+      if (documentFooter.enabled && documentFooter.root) {
+        const footerChildren = documentFooter.root.properties?.children || [];
+        for (const child of footerChildren) {
+          totalValidElements += countValidElements(child);
+        }
+      }
+
+      return totalValidElements > 0;
+    }
+
+    // Função para atualizar visibilidade do botão de pré-visualizar
+    function updatePreviewButtonVisibility() {
+      const bubbleTestBtn = document.getElementById('bubbleTestBtn');
+      if (!bubbleTestBtn) return;
+
+      if (hasAnyValidElements()) {
+        bubbleTestBtn.style.display = 'inline-flex';
+        bubbleTestBtn.style.alignItems = 'center';
+        bubbleTestBtn.style.justifyContent = 'center';
+        bubbleTestBtn.style.gap = '0.5rem';
+      } else {
+        bubbleTestBtn.style.display = 'none';
+      }
+    }
+
+    // Função para atualizar visibilidade da aba de código
+    function updateCodeTabVisibility() {
+      const tabCodeBtn = document.getElementById('tabCode');
+      const tabContentCode = document.getElementById('tabContentCode');
+      if (!tabCodeBtn || !tabContentCode) return;
+
+      const hasElements = hasAnyValidElements();
+      
+      tabCodeBtn.style.display = hasElements ? 'flex' : 'none';
+      // Se a aba de código estiver ativa e não houver elementos, mudar para a aba Editor
+      if (!hasElements && tabCodeBtn.classList.contains('active')) {
+        switchTab('editor'); // Force switch to editor if no elements
+      }
+    }
+
+    // Função para atualizar visibilidade dos botões "Salvar Template" e "Limpar"
+    function updateSaveTemplateButtonVisibility() {
+      const hasElements = hasAnyValidElements();
+
+      if (saveTemplateBtn) {
+        saveTemplateBtn.style.display = hasElements ? 'block' : 'none';
+      }
+      if (clearBtn) {
+        clearBtn.style.display = hasElements ? 'block' : 'none';
+      }
+
+      // Atualizar também o botão de pré-visualizar
+      updatePreviewButtonVisibility();
+      // NEW: Update code tab visibility
+      updateCodeTabVisibility();
+    }
+
+    function renderAll(shouldAdjustSize = true) {
+      // mantém selected id válido
+      if (selectedElementId && !findNodeById(selectedElementId)) {
+        selectedElementId = getRootGroup() ? getRootGroup().id : null;
+      }
+      // IMPORTANTE: Não ajustar tamanho do canvas durante edições de propriedades
+      // Isso evita crescimento infinito ao editar elementos
+      renderCanvas(shouldAdjustSize);
+      renderInspector();
+      // Código será gerado apenas quando usuário solicitar na aba de código
+      // Atualizar visibilidade dos botões
+      updateSaveTemplateButtonVisibility();
+      // Salvar estado automaticamente após renderizar
+      saveState();
+    }
+
+    function clearAll() {
+      // Limpar elementos principais
+      elements = [];
+      // Atualizar visibilidade dos botões
+      updatePreviewButtonVisibility();
+      // Atualizar visibilidade da aba de código
+      updateCodeTabVisibility();
+      selectedElementId = null;
+
+      // Limpar header/footer
+      if (documentHeader.root) {
+        documentHeader.root.properties.children = [];
+      }
+      if (documentFooter.root) {
+        documentFooter.root.properties.children = [];
+      }
+      documentHeader.enabled = false;
+      documentFooter.enabled = false;
+
+      // Resetar template atual (ao limpar, não há mais template carregado)
+      currentTemplateId = null;
+
+      // Limpar estado salvo também
+      clearSavedState();
+
+      // Atualizar UI
+      if (pageSizeSel) pageSizeSel.value = 'A4';
+      if (orientationSel) orientationSel.value = 'portrait';
+      if (mL) mL.value = 40;
+      if (mT) mT.value = 60;
+      if (mR) mR.value = 40;
+      if (mB) mB.value = 60;
+      pageSize = 'A4';
+      orientation = 'portrait';
+      pageMargins = [40, 60, 40, 60];
+
+      renderAll();
+    }
+
+    // Page settings binds
+    pageSizeSel.addEventListener('change', () => { pageSize = pageSizeSel.value; renderAll(); });
+    orientationSel.addEventListener('change', () => { orientation = orientationSel.value; renderAll(); });
+
+    function updateMargins() {
+      pageMargins = [
+        Number(mL.value || 0),
+        Number(mT.value || 0),
+        Number(mR.value || 0),
+        Number(mB.value || 0),
+      ];
+      renderAll();
+    }
+    [mL, mT, mR, mB].forEach(inp => inp.addEventListener('input', updateMargins));
+
+    // zoom
+    zoomRange.addEventListener('input', () => {
+      const val = Number(zoomRange.value || 100);
+      zoomLabel.textContent = val + '%';
+      zoom = val / 100;
+      applyZoom();
+    });
+
+    // Botões de zoom (+ e -)
+    const zoomDecrease = document.getElementById('zoomDecrease');
+    const zoomIncrease = document.getElementById('zoomIncrease');
+
+    function updateZoom(value) {
+      const clampedValue = Math.max(55, Math.min(140, value));
+      zoomRange.value = clampedValue;
+      zoomLabel.textContent = clampedValue + '%';
+      zoom = clampedValue / 100;
+      applyZoom();
+    }
+
+    if (zoomDecrease) {
+      zoomDecrease.addEventListener('click', () => {
+        const currentVal = Number(zoomRange.value || 100);
+        updateZoom(currentVal - 5); // Diminuir em 5%
+      });
+    }
+
+    if (zoomIncrease) {
+      zoomIncrease.addEventListener('click', () => {
+        const currentVal = Number(zoomRange.value || 100);
+        updateZoom(currentVal + 5); // Aumentar em 5%
+      });
+    }
+
+    /*
+
+    previewBtn.addEventListener('click', () => {
+      const dd = buildDocDefinition();
+      const pdfDoc = pdfMake.createPdf(dd);
+      
+      // Gerar PDF como blob e exibir no modal
+      pdfDoc.getBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const previewModal = document.getElementById('previewModal');
+        const previewIframe = document.getElementById('previewIframe');
+        
+        if (previewIframe) {
+          previewIframe.src = url;
+        }
+        
+        if (previewModal) {
+          previewModal.classList.add('active');
+        }
+      });
+    }); */
+
+    const BUBBLE_URL = "https://mentions-20237.bubbleapps.io/version-test/preview_pdf";
+
+    function getCodToSend() {
+      return (codeEditor.value ?? codeEditor.textContent ?? "").trim();
+    }
+
+    bubbleTestBtn.addEventListener("click", async () => {
+      // Verificar se há elementos antes de gerar código
+      if (!hasAnyValidElements()) {
+        showAlertModal('Aviso', 'Adicione pelo menos um elemento ao canvas para pré-visualizar o PDF.');
+        return;
+      }
+
+      // Mostrar modal de loading
+      showLoadingCodeModal();
+
+      try {
+        // Gerar código via Supabase
+        const generatedCode = await generateCodeViaSupabase();
+
+        // Atualizar o codeEditor global com o código gerado (para manter sincronizado)
+        if (codeEditor) {
+          codeEditor.textContent = generatedCode;
+        }
+
+        // Esconder modal de loading
+        hideLoadingCodeModal();
+
+        // Abrir modal de pré-visualização
+        const bubbleIframe = document.getElementById("bubbleTestIframe");
+        const bubbleModal = document.getElementById("bubbleTestModal");
+
+        // Armazenar o código em uma variável que será acessível no onload
+        let codToSend = generatedCode.trim();
+
+        bubbleModal.classList.add("active");
+        bubbleIframe.src = BUBBLE_URL;
+
+        bubbleIframe.onload = () => {
+          // Função para enviar código para o Bubble
+          const sendCodeToBubble = () => {
+            // Verificar novamente o código antes de enviar
+            const cod = codToSend || (codeEditor ? (codeEditor.value ?? codeEditor.textContent ?? "").trim() : '');
+            const origin = new URL(bubbleIframe.src).origin;
+
+            if (!cod) {
+              console.error('Erro: código está vazio ao enviar para Bubble');
+              showAlertModal('Erro', 'O código gerado está vazio. Por favor, tente novamente.');
+              return;
+            }
+            try {
+              bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
+               } catch (error) {
+              console.error('Erro ao enviar mensagem para Bubble:', error);
+              // Tentar novamente após mais um delay
+              setTimeout(() => {
+                try {
+                  bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
+                  } catch (retryError) {
+                  console.error('Erro na tentativa de reenvio:', retryError);
+                }
+              }, 1000);
+            }
+          };
+
+          // Aguardar um pouco para garantir que o iframe está totalmente carregado e o Bubble está pronto
+          setTimeout(sendCodeToBubble, 1000); // Aumentado para 1 segundo
+        };
+      } catch (error) {
+        // Esconder modal de loading em caso de erro
+        hideLoadingCodeModal();
+        
+        // Mostrar erro
+        const errorMessage = error.message || 'Erro desconhecido';
+        showAlertModal('Erro ao gerar código', `Não foi possível gerar o código para pré-visualização.\n\nErro: ${errorMessage}\n\nPor favor, verifique:\n1. Se a Edge Function está configurada e deployada corretamente\n2. Se a URL da Edge Function está correta\n3. Se há elementos no canvas\n4. Verifique o console para mais detalhes`);
+      }
+    });
+
+
+    clearBtn.addEventListener('click', () => {
+      clearAll();
+    });
+
+    // Sistema de Templates
+    const TEMPLATE_STORAGE_KEY = 'pdf_editor_templates';
+
+    function saveTemplate() {
+      // Se há um template carregado, atualizar diretamente sem mostrar modal
+      if (currentTemplateId) {
+        // Buscar nome do template atual para usar na atualização
+        confirmSaveTemplate();
+        return;
+      }
+
+      // Caso contrário, mostrar modal para criar novo template
+      const modal = document.getElementById('saveTemplateModal');
+      const input = document.getElementById('saveTemplateNameInput');
+      const errorDiv = document.getElementById('saveTemplateError');
+
+      if (modal && input) {
+        input.value = '';
+        errorDiv.style.display = 'none';
+        modal.classList.add('active');
+        input.focus();
+
+        // Permitir salvar com Enter
+        input.addEventListener('keypress', function (e) {
+          if (e.key === 'Enter') {
+            confirmSaveTemplate();
+          }
+        });
+      }
+    }
+    window.saveTemplate = saveTemplate;
+
+    async function confirmSaveTemplate() {
+      const input = document.getElementById('saveTemplateNameInput');
+      const errorDiv = document.getElementById('saveTemplateError');
+      let templateName;
+
+      // Verificar se usuário está autenticado
+      if (!currentUser || !currentProfile || !currentInstallation) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Você precisa estar logado para salvar templates.';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+
+      if (currentTemplateId) {
+        // Atualizar template existente - buscar nome atual do template
+        try {
+          const { data: template, error: fetchError } = await supabaseClient
+            .from('template')
+            .select('name')
+            .eq('id', currentTemplateId)
+            .eq('id_profile', currentProfile.id)
+            .eq('id_installation', currentInstallation.id)
+            .single();
+
+          if (fetchError) {
+            throw fetchError;
+          }
+
+          templateName = template.name;
+        } catch (e) {
+          console.error('Erro ao buscar template:', e);
+          if (errorDiv) {
+            errorDiv.textContent = 'Erro ao buscar template: ' + (e.message || e);
+            errorDiv.style.display = 'block';
+          }
+          return;
+        }
+      } else {
+        // Criar novo template - precisa do nome do input
+        templateName = input?.value.trim();
+        if (!templateName) {
+          if (errorDiv) {
+            errorDiv.textContent = 'Por favor, digite um nome para o template.';
+            errorDiv.style.display = 'block';
+          }
+          return;
+        }
+      }
+
+      try {
+        const rootGroup = getRootGroup();
+        const templateData = {
+          name: templateName,
+          rootGroup: rootGroup ? JSON.parse(JSON.stringify(rootGroup)) : null,
+          documentHeader: documentHeader ? JSON.parse(JSON.stringify(documentHeader)) : null,
+          documentFooter: documentFooter ? JSON.parse(JSON.stringify(documentFooter)) : null,
+          documentWatermark: documentWatermark ? JSON.parse(JSON.stringify(documentWatermark)) : null,
+          documentTOC: documentTOC ? JSON.parse(JSON.stringify(documentTOC)) : null,
+          documentSecurity: documentSecurity ? JSON.parse(JSON.stringify(documentSecurity)) : null,
+          documentPageInfo: documentPageInfo ? JSON.parse(JSON.stringify(documentPageInfo)) : null,
+          documentCompress: documentCompress,
+          pageSize: pageSizeSel?.value || 'A4',
+          orientation: document.getElementById('orientation')?.value || 'portrait',
+          margins: [
+            parseInt(document.getElementById('mL')?.value || 40),
+            parseInt(document.getElementById('mT')?.value || 60),
+            parseInt(document.getElementById('mR')?.value || 40),
+            parseInt(document.getElementById('mB')?.value || 60)
+          ]
+        };
+
+        // Converter template para JSON string (campo cod no Supabase)
+        const cod = JSON.stringify(templateData);
+
+        if (currentTemplateId) {
+          // Atualizar template existente
+          const { data, error } = await supabaseClient
+            .from('template')
+            .update({
+              cod: cod,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', currentTemplateId)
+            .eq('id_profile', currentProfile.id)
+            .eq('id_installation', currentInstallation.id);
+
+          if (error) {
+            throw error;
+          }
+
+          closeSaveTemplateModal();
+
+          if (typeof showAlertModal === 'function') {
+            showAlertModal('Sucesso', `Template "${templateName}" atualizado com sucesso!`);
+          }
+        } else {
+          // Criar novo template
+          const { data, error } = await supabaseClient
+            .from('template')
+            .insert({
+              id_profile: currentProfile.id,
+              id_installation: currentInstallation.id,
+              name: templateName,
+              cod: cod
+            })
+            .select()
+            .single();
+
+          if (error) {
+            throw error;
+          }
+
+          // Salvar ID do template criado
+          currentTemplateId = data.id;
+
+          closeSaveTemplateModal();
+
+          if (typeof showAlertModal === 'function') {
+            showAlertModal('Sucesso', `Template "${templateName}" salvo com sucesso!`);
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao salvar template:', e);
+        if (errorDiv) {
+          errorDiv.textContent = 'Erro ao salvar template: ' + (e.message || e);
+          errorDiv.style.display = 'block';
+        }
+      }
+    }
+    window.confirmSaveTemplate = confirmSaveTemplate;
+
+    function closeSaveTemplateModal() {
+      const modal = document.getElementById('saveTemplateModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+    window.closeSaveTemplateModal = closeSaveTemplateModal;
+
+    async function loadTemplate() {
+      const modal = document.getElementById('loadTemplateModal');
+      const listDiv = document.getElementById('loadTemplateList');
+      const emptyDiv = document.getElementById('loadTemplateEmpty');
+
+      if (!modal || !listDiv) return;
+
+      // Verificar se usuário está autenticado
+      if (!currentUser || !currentProfile || !currentInstallation) {
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Erro', 'Você precisa estar logado para carregar templates.');
+        }
+        return;
+      }
+
+      try {
+        // Buscar templates do Supabase
+        const { data: templates, error } = await supabaseClient
+          .from('template')
+          .select('*')
+          .eq('id_profile', currentProfile.id)
+          .eq('id_installation', currentInstallation.id)
+          .order('updated_at', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!templates || templates.length === 0) {
+          if (emptyDiv) emptyDiv.style.display = 'block';
+          if (listDiv) listDiv.style.display = 'none';
+          modal.classList.add('active');
+          return;
+        }
+
+        // Criar lista de templates
+        listDiv.innerHTML = '';
+        templates.forEach((template) => {
+          const templateItem = document.createElement('div');
+          templateItem.style.cssText = 'padding: 1rem; margin-bottom: 0.5rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer; transition: background 0.2s;';
+          templateItem.onmouseenter = () => templateItem.style.background = '#f3f4f6';
+          templateItem.onmouseleave = () => templateItem.style.background = 'white';
+
+          const nameDiv = document.createElement('div');
+          nameDiv.style.cssText = 'font-weight: 600; color: #111827; margin-bottom: 0.25rem;';
+          nameDiv.textContent = template.name;
+
+          const dateDiv = document.createElement('div');
+          dateDiv.style.cssText = 'font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;';
+          dateDiv.textContent = `Atualizado em: ${new Date(template.updated_at).toLocaleString('pt-BR')}`;
+
+          const buttonDiv = document.createElement('div');
+          buttonDiv.style.cssText = 'display: flex; gap: 0.5rem;';
+
+          const loadBtn = document.createElement('button');
+          loadBtn.textContent = '📂 Carregar';
+          loadBtn.style.cssText = 'flex: 1; padding: 0.5rem; background: #2563eb; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;';
+          loadBtn.onclick = (e) => {
+            e.stopPropagation();
+            loadTemplateConfirm(template);
+          };
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.textContent = '🗑️ Deletar';
+          deleteBtn.style.cssText = 'flex: 1; padding: 0.5rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;';
+          deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (typeof deleteTemplate === 'function') {
+              deleteTemplate(template.id, template.name);
+            } else {
+              console.error('deleteTemplate não está disponível');
+            }
+          };
+
+          buttonDiv.appendChild(loadBtn);
+          buttonDiv.appendChild(deleteBtn);
+
+          templateItem.appendChild(nameDiv);
+          templateItem.appendChild(dateDiv);
+          templateItem.appendChild(buttonDiv);
+
+          listDiv.appendChild(templateItem);
+        });
+
+        if (emptyDiv) emptyDiv.style.display = 'none';
+        if (listDiv) listDiv.style.display = 'block';
+        modal.classList.add('active');
+      } catch (e) {
+        console.error('Erro ao carregar templates:', e);
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Erro', 'Erro ao carregar templates: ' + e.message);
+        }
+      }
+    }
+    window.loadTemplate = loadTemplate;
+
+    function loadTemplateConfirm(template) {
+      // Fechar modal de templates primeiro
+      closeLoadTemplateModal();
+
+      // Salvar ID do template carregado para atualização posterior
+      currentTemplateId = template.id;
+
+      // Função para carregar o template
+      const doLoadTemplate = () => {
+        try {
+          // Parsear o campo cod que contém o JSON do template
+          let templateData;
+          if (typeof template.cod === 'string') {
+            templateData = JSON.parse(template.cod);
+          } else {
+            templateData = template.cod || {};
+          }
+
+          // Carregar template - fazer deep copy para evitar referências
+          if (templateData.rootGroup) {
+            const rootGroupCopy = JSON.parse(JSON.stringify(templateData.rootGroup));
+            elements = [rootGroupCopy];
+          } else {
+            elements = [];
+          }
+
+          // Fazer deep copy de todos os objetos para evitar referências
+          if (templateData.documentHeader) {
+            documentHeader = JSON.parse(JSON.stringify(templateData.documentHeader));
+            if (!documentHeader.root) {
+              documentHeader.root = createHeaderFooterRoot();
+            }
+          } else {
+            documentHeader = { enabled: false, root: createHeaderFooterRoot() };
+          }
+
+          if (templateData.documentFooter) {
+            documentFooter = JSON.parse(JSON.stringify(templateData.documentFooter));
+            if (!documentFooter.root) {
+              documentFooter.root = createHeaderFooterRoot();
+            }
+          } else {
+            documentFooter = { enabled: false, root: createHeaderFooterRoot() };
+          }
+
+          documentWatermark = templateData.documentWatermark ? JSON.parse(JSON.stringify(templateData.documentWatermark)) : null;
+          documentTOC = templateData.documentTOC ? JSON.parse(JSON.stringify(templateData.documentTOC)) : null;
+          documentSecurity = templateData.documentSecurity ? JSON.parse(JSON.stringify(templateData.documentSecurity)) : null;
+          documentPageInfo = templateData.documentPageInfo ? JSON.parse(JSON.stringify(templateData.documentPageInfo)) : null;
+          documentCompress = templateData.documentCompress || false;
+
+          // Atualizar UI
+          if (pageSizeSel && templateData.pageSize) {
+            pageSizeSel.value = templateData.pageSize;
+          }
+          const orientationSel = document.getElementById('orientation');
+          if (orientationSel && templateData.orientation) {
+            orientationSel.value = templateData.orientation;
+          }
+          if (templateData.margins && Array.isArray(templateData.margins)) {
+            const mL = document.getElementById('mL');
+            const mT = document.getElementById('mT');
+            const mR = document.getElementById('mR');
+            const mB = document.getElementById('mB');
+            if (mL) mL.value = templateData.margins[0] || 40;
+            if (mT) mT.value = templateData.margins[1] || 60;
+            if (mR) mR.value = templateData.margins[2] || 40;
+            if (mB) mB.value = templateData.margins[3] || 60;
+          }
+
+          selectedElementId = null;
+
+          // Atualizar renderização após um pequeno delay para garantir que o DOM está pronto
+          setTimeout(() => {
+            if (typeof renderAll === 'function') {
+              renderAll();
+            }
+            if (typeof renderInspector === 'function') {
+              renderInspector();
+            }
+            if (typeof renderPageInspector === 'function') {
+              renderPageInspector();
+            }
+            // Código será gerado apenas quando usuário solicitar na aba de código
+            if (typeof saveState === 'function') {
+              saveState();
+            }
+
+            if (typeof showAlertModal === 'function') {
+              showAlertModal('Sucesso', `Template "${template.name}" carregado com sucesso!`);
+            }
+            // Atualizar visibilidade do botão "Salvar Template"
+            if (typeof updateSaveTemplateButtonVisibility === 'function') {
+              updateSaveTemplateButtonVisibility();
+            }
+          }, 100);
+        } catch (e) {
+          console.error('Erro ao carregar template:', e);
+          if (typeof showAlertModal === 'function') {
+            showAlertModal('Erro', 'Erro ao carregar template: ' + e.message);
+          }
+        }
+      };
+
+      if (typeof showConfirmModal === 'function') {
+        showConfirmModal(
+          'Carregar Template',
+          `Carregar template "${template.name}"? Isso substituirá o conteúdo atual.`,
+          doLoadTemplate
+        );
+      } else {
+        // Se não houver modal de confirmação, carregar diretamente
+        doLoadTemplate();
+      }
+    }
+
+    async function deleteTemplate(templateId, templateName) {
+      try {
+        // Verificar se usuário está autenticado
+        if (!currentUser || !currentProfile || !currentInstallation) {
+          if (typeof showAlertModal === 'function') {
+            showAlertModal('Erro', 'Você precisa estar logado para deletar templates.');
+          }
+          return;
+        }
+
+        // Fechar o modal de templates antes de abrir o modal de confirmação
+        if (typeof closeLoadTemplateModal === 'function') {
+          closeLoadTemplateModal();
+        }
+
+        if (typeof showConfirmModal === 'function') {
+          // Pequeno delay para garantir que o modal anterior foi fechado
+          setTimeout(() => {
+            showConfirmModal(
+              'Deletar Template',
+              `Tem certeza que deseja deletar o template "${templateName}"?`,
+              async () => {
+                try {
+                  // Deletar do Supabase
+                  const { error } = await supabaseClient
+                    .from('template')
+                    .delete()
+                    .eq('id', templateId)
+                    .eq('id_profile', currentProfile.id)
+                    .eq('id_installation', currentInstallation.id);
+
+                  if (error) {
+                    throw error;
+                  }
+
+                  // Se o template deletado era o atual, limpar currentTemplateId
+                  if (currentTemplateId === templateId) {
+                    currentTemplateId = null;
+                  }
+
+                  // Recarregar lista
+                  await loadTemplate();
+
+                  if (typeof showAlertModal === 'function') {
+                    showAlertModal('Sucesso', `Template "${templateName}" deletado com sucesso!`);
+                  }
+                } catch (e) {
+                  console.error('Erro ao deletar template:', e);
+                  if (typeof showAlertModal === 'function') {
+                    showAlertModal('Erro', 'Erro ao deletar template: ' + (e.message || e));
+                  }
+                }
+              }
+            );
+          }, 100);
+        } else {
+          // Fallback se showConfirmModal não estiver disponível
+          if (confirm(`Tem certeza que deseja deletar o template "${templateName}"?`)) {
+            try {
+              // Deletar do Supabase
+              const { error } = await supabaseClient
+                .from('template')
+                .delete()
+                .eq('id', templateId)
+                .eq('id_profile', currentProfile.id)
+                .eq('id_installation', currentInstallation.id);
+
+              if (error) {
+                throw error;
+              }
+
+              // Se o template deletado era o atual, limpar currentTemplateId
+              if (currentTemplateId === templateId) {
+                currentTemplateId = null;
+              }
+
+              // Recarregar lista
+              await loadTemplate();
+
+              if (typeof showAlertModal === 'function') {
+                showAlertModal('Sucesso', `Template "${templateName}" deletado com sucesso!`);
+              }
+            } catch (e) {
+              console.error('Erro ao deletar template:', e);
+              if (typeof showAlertModal === 'function') {
+                showAlertModal('Erro', 'Erro ao deletar template: ' + (e.message || e));
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao deletar template:', e);
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Erro', 'Erro ao deletar template: ' + (e.message || e));
+        }
+      }
+    }
+    window.deleteTemplate = deleteTemplate; // Tornar global
+
+    function closeLoadTemplateModal() {
+      const modal = document.getElementById('loadTemplateModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+    window.closeLoadTemplateModal = closeLoadTemplateModal;
+
+    const loadTemplateBtn = document.getElementById('loadTemplateBtn');
+    if (saveTemplateBtn) {
+      saveTemplateBtn.addEventListener('click', saveTemplate);
+    }
+    if (loadTemplateBtn) {
+      loadTemplateBtn.addEventListener('click', loadTemplate);
+    }
+
+    // copy in code tab
+    if (copyBtn) copyBtn.addEventListener('click', copyCode);
+
+    // Canvas click to deselect
+    canvas.addEventListener('click', (e) => {
+      if (e.target === canvas || e.target === elementsList || e.target === canvasEmpty) {
+        const rootGroup = getRootGroup();
+        const newSelectedId = rootGroup ? rootGroup.id : null;
+
+        // Evitar re-renderização desnecessária se já está selecionado
+        if (selectedElementId === newSelectedId) {
+          return;
+        }
+
+        // IMPORTANTE: Usar selectElement() que não recria o DOM, apenas atualiza seleção visual
+        // Isso evita crescimento infinito ao clicar no canvas
+        if (newSelectedId) {
+          selectElement(newSelectedId);
+        } else {
+          // Desselecionar tudo sem recriar DOM
+          const prevSelected = selectedElementId ? document.querySelector(`[data-id="${selectedElementId}"]`) : null;
+          if (prevSelected) {
+            prevSelected.classList.remove('selected');
+          }
+          selectedElementId = null;
+          renderInspector();
+          // Código será gerado apenas quando usuário solicitar na aba de código
+        }
+      }
+    });
+
+    // -----------------------
+    // Funções de Autenticação Supabase
+    // -----------------------
+
+    async function checkAuth() {
+      if (!supabaseClient) {
+        initSupabase();
+        return;
+      }
+
+      try {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+        if (error) {
+          console.error('Erro ao verificar sessão:', error);
+          showLoginModal();
+          return;
+        }
+
+        if (session && session.user) {
+          currentUser = session.user;
+          await loadUserProfile();
+          hideLoginModal();
+        } else {
+          showLoginModal();
+        }
+      } catch (error) {
+        console.error('Erro ao verificar autenticação:', error);
+        showLoginModal();
+      }
+    }
+
+    async function loadUserProfile() {
+      if (!currentUser) return;
+
+      try {
+        // Buscar ou criar profile
+        let { data: profile, error } = await supabaseClient
+          .from('profile')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .single();
+
+        if (error && error.code === 'PGRST116') {
+          // Profile não existe, criar um novo
+          const { data: newProfile, error: createError } = await supabaseClient
+            .from('profile')
+            .insert({
+              user_id: currentUser.id,
+              email: currentUser.email,
+              full_name: currentUser.email?.split('@')[0] || 'Usuário'
+            })
+            .select()
+            .single();
+
+          if (createError) {
+            console.error('Erro ao criar profile:', createError);
+            return;
+          }
+
+          currentProfile = newProfile;
+        } else if (error) {
+          console.error('Erro ao carregar profile:', error);
+          return;
+        } else {
+          currentProfile = profile;
+        }
+
+        // Buscar ou criar installation (usando app_id padrão por enquanto)
+        // Você pode ajustar isso conforme necessário
+        const appId = 'default_app';
+        let { data: installation, error: instError } = await supabaseClient
+          .from('installation')
+          .select('*')
+          .eq('id_profile', currentProfile.id)
+          .eq('app_id', appId)
+          .eq('status', 'active')
+          .single();
+
+        if (instError && instError.code === 'PGRST116') {
+          // Installation não existe, criar uma nova
+          const { data: newInstallation, error: createInstError } = await supabaseClient
+            .from('installation')
+            .insert({
+              id_profile: currentProfile.id,
+              app_id: appId,
+              access_token: 'default_token', // Você pode ajustar isso
+              status: 'active'
+            })
+            .select()
+            .single();
+
+          if (createInstError) {
+            console.error('Erro ao criar installation:', createInstError);
+            return;
+          }
+
+          currentInstallation = newInstallation;
+        } else if (instError) {
+          console.error('Erro ao carregar installation:', instError);
+          return;
+        } else {
+          currentInstallation = installation;
+        }
+      } catch (error) {
+        console.error('Erro ao carregar dados do usuário:', error);
+      }
+    }
+
+    function showLoginModal() {
+      const modal = document.getElementById('loginModal');
+      if (modal) {
+        modal.classList.add('active');
+        const emailInput = document.getElementById('loginEmailInput');
+        if (emailInput) emailInput.focus();
+      }
+    }
+
+    function hideLoginModal() {
+      const modal = document.getElementById('loginModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+
+    async function handleLogin() {
+      const emailInput = document.getElementById('loginEmailInput');
+      const passwordInput = document.getElementById('loginPasswordInput');
+      const errorDiv = document.getElementById('loginError');
+
+      const email = emailInput?.value.trim();
+      const password = passwordInput?.value;
+
+      if (!email || !password) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Por favor, preencha e-mail e senha.';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+
+      if (!supabaseClient) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Erro: Supabase não inicializado.';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+
+      try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data && data.user) {
+          currentUser = data.user;
+          await loadUserProfile();
+          hideLoginModal();
+
+          // Limpar campos
+          if (emailInput) emailInput.value = '';
+          if (passwordInput) passwordInput.value = '';
+          if (errorDiv) errorDiv.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Erro ao fazer login:', error);
+        if (errorDiv) {
+          errorDiv.textContent = error.message || 'Erro ao fazer login. Verifique suas credenciais.';
+          errorDiv.style.display = 'block';
+        }
+      }
+    }
+
+    window.handleLogin = handleLogin;
+
+    // Permitir login com Enter
+    // Dark Mode Toggle
+    function initDarkMode() {
+      const darkModeToggle = document.getElementById('darkModeToggle');
+      const savedTheme = localStorage.getItem('theme') || 'light';
+
+      // Aplicar tema salvo
+      document.documentElement.setAttribute('data-theme', savedTheme);
+
+      if (darkModeToggle) {
+        darkModeToggle.addEventListener('click', () => {
+          const currentTheme = document.documentElement.getAttribute('data-theme');
+          const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+          document.documentElement.setAttribute('data-theme', newTheme);
+          localStorage.setItem('theme', newTheme);
+        });
+      }
+    }
+
+    // Função para tornar o painel direito arrastável
+    function initDraggablePanel() {
+      const panel = document.getElementById('codePanel');
+      const header = document.getElementById('codePanelHeader');
+      const headerElement = document.querySelector('.header');
+
+      if (!panel || !header) return;
+
+      let isDragging = false;
+      let currentX = 0;
+      let currentY = 0;
+      let initialX = 0;
+      let initialY = 0;
+      let headerHeight = headerElement ? headerElement.offsetHeight : 0;
+
+      // Carregar posição salva
+      const savedPosition = localStorage.getItem('codePanelPosition');
+      if (savedPosition) {
+        try {
+          const pos = JSON.parse(savedPosition);
+          panel.style.right = pos.right + 'px';
+          panel.style.top = pos.top + 'px';
+          panel.style.bottom = pos.bottom + 'px';
+          updateCanvasMargin(pos.right);
+        } catch (e) {
+          // Ignorar erro ao carregar posição
+        }
+      }
+
+      function updateCanvasMargin(right) {
+        // Função mantida para compatibilidade, mas não precisa fazer nada
+        // pois o painel agora é flutuante (position: fixed) e não afeta o layout do canvas
+        // O canvas sempre terá margin-right: 0
+      }
+
+      function dragStart(e) {
+        if (e.target.closest('.tab-btn') || e.target.closest('.close-panel-btn')) {
+          // Não iniciar drag se clicar nos botões de tab ou fechar
+          return;
+        }
+
+        // Parar propagação do evento para não afetar o canvas
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+
+        initialX = e.clientX;
+        initialY = e.clientY;
+
+        const rect = panel.getBoundingClientRect();
+        currentX = window.innerWidth - rect.right;
+        currentY = rect.top;
+
+        isDragging = true;
+        panel.classList.add('dragging');
+        document.body.classList.add('panel-dragging');
+
+        // Prevenir eventos de scroll e outros durante o arraste
+        document.body.style.overflow = 'hidden';
+
+        document.addEventListener('mousemove', drag, { passive: false, capture: true });
+        document.addEventListener('mouseup', dragEnd, { passive: false, capture: true });
+      }
+
+      function drag(e) {
+        if (!isDragging) return;
+
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+
+        const deltaX = initialX - e.clientX;
+        const deltaY = e.clientY - initialY;
+
+        let newRight = currentX + deltaX;
+        let newTop = currentY + deltaY;
+
+        // Limitar movimento horizontal (não pode ir além da borda esquerda)
+        // Considerar largura mínima do painel (300px) ou largura atual se maior
+        const panelWidth = panel.offsetWidth || 300;
+        const maxRight = window.innerWidth - panelWidth;
+        newRight = Math.max(0, Math.min(newRight, maxRight));
+
+        // Limitar movimento vertical (não pode ir acima do header)
+        newTop = Math.max(headerHeight, newTop);
+
+        // Limitar movimento vertical inferior
+        const maxTop = window.innerHeight - 200; // Altura mínima do painel
+        newTop = Math.min(newTop, maxTop);
+
+        // Usar transform para melhor performance
+        panel.style.right = newRight + 'px';
+        panel.style.top = newTop + 'px';
+        panel.style.bottom = 'auto';
+
+        updateCanvasMargin(newRight);
+      }
+
+      function dragEnd(e) {
+        if (!isDragging) return;
+
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        isDragging = false;
+        panel.classList.remove('dragging');
+        document.body.classList.remove('panel-dragging');
+        document.body.style.overflow = '';
+
+        const rect = panel.getBoundingClientRect();
+        const position = {
+          right: window.innerWidth - rect.right,
+          top: rect.top,
+          bottom: window.innerHeight - rect.bottom
+        };
+
+        // Salvar posição
+        localStorage.setItem('codePanelPosition', JSON.stringify(position));
+
+        document.removeEventListener('mousemove', drag, { capture: true });
+        document.removeEventListener('mouseup', dragEnd, { capture: true });
+      }
+
+      header.addEventListener('mousedown', dragStart);
+
+      // Atualizar altura do header quando a janela redimensionar
+      window.addEventListener('resize', () => {
+        headerHeight = headerElement ? headerElement.offsetHeight : 0;
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Inicializar dark mode
+      initDarkMode();
+
+      // Inicializar painel arrastável
+      initDraggablePanel();
+
+      // Inicializar visibilidade do botão de pré-visualizar
+      if (typeof updatePreviewButtonVisibility === 'function') {
+        updatePreviewButtonVisibility();
+      }
+
+      // Inicializar visibilidade da aba de código
+      if (typeof updateCodeTabVisibility === 'function') {
+        updateCodeTabVisibility();
+      }
+
+      const emailInput = document.getElementById('loginEmailInput');
+      const passwordInput = document.getElementById('loginPasswordInput');
+
+      if (emailInput) {
+        emailInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            passwordInput?.focus();
+          }
+        });
+      }
+
+      if (passwordInput) {
+        passwordInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            handleLogin();
+          }
+        });
+      }
+    });
+
+    // init
+    function closeModal() { const m = document.getElementById('modal'); if (m) m.classList.remove('active'); }
+    function openModal() { const m = document.getElementById('modal'); if (m) m.classList.add('active'); }
+
+    function init() {
+      // Tentar carregar estado salvo do localStorage
+      const loaded = loadState();
+
+      // Se não houver estado salvo, usar defaults
+      if (!loaded) {
+        pageSizeSel.value = pageSize;
+        orientationSel.value = orientation;
+        mL.value = pageMargins[0];
+        mT.value = pageMargins[1];
+        mR.value = pageMargins[2];
+        mB.value = pageMargins[3];
+        zoomRange.value = 100;
+        zoomLabel.textContent = '100%';
+        zoom = 1;
+      } else {
+        // Estado carregado - os valores já foram restaurados em loadState()
+        // Apenas garantir que os inputs do DOM estão sincronizados
+        if (pageSizeSel) pageSizeSel.value = pageSize;
+        if (orientationSel) orientationSel.value = orientation;
+        if (mL) mL.value = pageMargins[0];
+        if (mT) mT.value = pageMargins[1];
+        if (mR) mR.value = pageMargins[2];
+        if (mB) mB.value = pageMargins[3];
+        if (zoomRange) {
+          zoomRange.value = Math.round(zoom * 100);
+          if (zoomLabel) zoomLabel.textContent = Math.round(zoom * 100) + '%';
+        }
+
+        // Restaurar código gerado se existir
+        try {
+          const savedCode = localStorage.getItem(STORAGE_CODE_KEY);
+          if (savedCode && codeEditor) {
+            codeEditor.textContent = savedCode;
+          }
+        } catch (e) {
+          console.warn('Erro ao restaurar código do localStorage:', e);
+        }
+      }
+
+      // Renderizar tudo (vai gerar novo código se não houver código salvo)
+      renderAll();
+
+      // Atualizar visibilidade do botão "Salvar Template" na inicialização
+      updateSaveTemplateButtonVisibility();
+
+      // Aplicar zoom após renderizar
+      applyZoom();
+    }
+
+    init();
+
+    // -----------------------
+    // V1 - Replicação com IA desabilitada
+    // -----------------------
+    /*
+    let selectedPDFFile = null;
+    let pdfPageCount = 0;
+    let pdfPageCount = 0;
+    
+    // Abrir modal de replicação com IA
+    const aiReplicateBtn = document.getElementById('aiReplicateBtn');
+    if (aiReplicateBtn) {
+      aiReplicateBtn.addEventListener('click', () => {
+        openAIReplicateModal();
+      });
+    }
+    
+    function openAIReplicateModal() {
+      const modal = document.getElementById('aiReplicateModal');
+      const fileInput = document.getElementById('pdfFileInput');
+      const fileInfo = document.getElementById('pdfFileInfo');
+      const errorDiv = document.getElementById('aiReplicateError');
+      const replicateBtn = document.getElementById('replicateBtn');
+      
+      if (modal) {
+        // Resetar estado
+        selectedPDFFile = null;
+        pdfPageCount = 0;
+        if (fileInput) fileInput.value = '';
+        if (fileInfo) fileInfo.style.display = 'none';
+        if (errorDiv) {
+          errorDiv.style.display = 'none';
+          errorDiv.textContent = '';
+        }
+        if (replicateBtn) replicateBtn.disabled = true;
+        
+        modal.classList.add('active');
+        
+        // Adicionar listener para mudança de arquivo
+        if (fileInput) {
+          fileInput.addEventListener('change', handlePDFFileSelect);
+        }
+      }
+    }
+    
+    function closeAIReplicateModal() {
+      const modal = document.getElementById('aiReplicateModal');
+      if (modal) {
+        modal.classList.remove('active');
+      }
+    }
+    window.closeAIReplicateModal = closeAIReplicateModal;
+    
+    async function handlePDFFileSelect(event) {
+      const file = event.target.files[0];
+      const fileInfo = document.getElementById('pdfFileInfo');
+      const fileName = document.getElementById('pdfFileName');
+      const fileSize = document.getElementById('pdfFileSize');
+      const errorDiv = document.getElementById('aiReplicateError');
+      const replicateBtn = document.getElementById('replicateBtn');
+      
+      if (!file) {
+        if (fileInfo) fileInfo.style.display = 'none';
+        if (replicateBtn) replicateBtn.disabled = true;
+        return;
+      }
+      
+      // Validar tipo de arquivo
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Por favor, selecione apenas arquivos PDF.';
+          errorDiv.style.display = 'block';
+        }
+        if (fileInfo) fileInfo.style.display = 'none';
+        if (replicateBtn) replicateBtn.disabled = true;
+        return;
+      }
+      
+      // Validar tamanho (máximo 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        if (errorDiv) {
+          errorDiv.textContent = 'O arquivo é muito grande. Máximo de 10MB permitido.';
+          errorDiv.style.display = 'block';
+        }
+        if (fileInfo) fileInfo.style.display = 'none';
+        if (replicateBtn) replicateBtn.disabled = true;
+        return;
+      }
+      
+      // Contar páginas do PDF
+      try {
+        pdfPageCount = await countPDFPages(file);
+        
+        if (pdfPageCount > 2) {
+          if (errorDiv) {
+            errorDiv.textContent = `O PDF possui ${pdfPageCount} páginas. Recomendamos no máximo 2 páginas para melhor resultado.`;
+            errorDiv.style.display = 'block';
+          }
+          // Ainda permite continuar, mas mostra aviso
+        } else {
+          if (errorDiv) errorDiv.style.display = 'none';
+        }
+        
+        // Mostrar informações do arquivo
+        selectedPDFFile = file;
+        if (fileInfo) fileInfo.style.display = 'block';
+        if (fileName) fileName.textContent = file.name;
+        if (fileSize) {
+          const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          fileSize.textContent = `${sizeMB} MB • ${pdfPageCount} página${pdfPageCount !== 1 ? 's' : ''}`;
+        }
+        if (replicateBtn) replicateBtn.disabled = false;
+      } catch (error) {
+        console.error('Erro ao processar PDF:', error);
+        if (errorDiv) {
+          errorDiv.textContent = 'Erro ao processar o arquivo PDF. Por favor, tente novamente.';
+          errorDiv.style.display = 'block';
+        }
+        if (fileInfo) fileInfo.style.display = 'none';
+        if (replicateBtn) replicateBtn.disabled = true;
+      }
+    }
+    
+    async function countPDFPages(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const arrayBuffer = e.target.result;
+          const uint8Array = new Uint8Array(arrayBuffer);
+          const pdfText = new TextDecoder('latin1').decode(uint8Array);
+          
+          // Contar ocorrências de /Type/Page ou /Count
+          const pageMatches = pdfText.match(/\/Type[\s]*\/Page[^s]/g);
+          if (pageMatches) {
+            resolve(pageMatches.length);
+          } else {
+            // Tentar método alternativo
+            const countMatch = pdfText.match(/\/Count[\s]+(\d+)/);
+            if (countMatch) {
+              resolve(parseInt(countMatch[1]));
+            } else {
+              resolve(1); // Default para 1 página se não conseguir contar
+            }
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+    }
+    
+    async function handleAIReplicate() {
+      if (!selectedPDFFile) {
+        return;
+      }
+      
+      const errorDiv = document.getElementById('aiReplicateError');
+      const loadingDiv = document.getElementById('aiReplicateLoading');
+      const replicateBtn = document.getElementById('replicateBtn');
+      const modal = document.getElementById('aiReplicateModal');
+      
+      // Mostrar loading
+      if (loadingDiv) loadingDiv.style.display = 'block';
+      if (errorDiv) errorDiv.style.display = 'none';
+      if (replicateBtn) replicateBtn.disabled = true;
+      
+      try {
+        // Ler o prompt do agente
+        const agentPrompt = `🎯 PROMPT — AGENTE CONVERSOR DE PDF → LAYOUT PDFMAKE
+Contexto
+
+Você é um especialista sênior em engenharia de layout PDF, com domínio profundo de pdfMake, estrutura de documentos, paginação, headers, tabelas, grids, imagens base64, canvas, SVG e tipografia.
+
+Seu trabalho é analisar um arquivo PDF enviado e reconstruir fielmente o layout desse PDF em código pdfMake, pronto para uso em produção.
+
+Objetivo Principal
+
+Analisar todo o PDF e recriar o layout completo usando pdfMake, retornando apenas o código necessário para gerar aquele PDF novamente.
+
+O resultado final deve ser:
+var dd = { ... };
+
+ou, se necessário para organização:
+var dd = (function () {
+  // ...
+  return { ... };
+})();
+
+Requisitos Obrigatórios (LEIA COM ATENÇÃO)
+
+1. Fidelidade visual
+Você deve:
+- Replicar posições, espaçamentos e alinhamentos
+- Replicar tabelas, linhas, colunas, bordas
+- Replicar títulos, subtítulos, textos legais, observações
+- Replicar assinaturas, linhas de assinatura, labels
+- Replicar quebras de página
+- Replicar hierarquia visual
+
+📌 Não simplifique o layout.
+📌 Não invente design.
+📌 Não "aproxime".
+É para ficar o mais fiel possível ao PDF original.
+
+2. Header e Footer
+❗ NÃO utilize dd.header ou dd.footer como funções.
+
+Sempre que existir um header visual:
+- Ele deve ser renderizado dentro do content
+- Preferencialmente como uma função pageHeader() que retorna blocos do content
+
+Exemplo aceitável:
+content.push(...pageHeader());
+
+3. Imagens
+Toda imagem deve ser tratada como:
+image: "<URL ou data:image/...>"
+
+❗ Nunca assuma que a imagem já está em base64
+❗ Nunca converta imagens dentro do código
+
+4. Tipografia
+Utilize fontSize, bold, italics, alignment, lineHeight
+Não use fontes externas
+Trabalhe apenas com fontes padrão do pdfMake
+
+5. Tabelas
+Sempre que visualizar:
+- Grades
+- Linhas estruturadas
+- Colunas alinhadas
+
+Use:
+table: {
+  widths: [...],
+  body: [...]
+}
+
+Com:
+layout: "noBorders" quando não houver bordas
+Layout customizado quando houver linhas visíveis
+
+6. Linhas e separadores
+Para linhas horizontais ou campos de preenchimento, use:
+canvas: [{
+  type: "line",
+  x1: 0, y1: 0,
+  x2: <largura>,
+  y2: 0,
+  lineWidth: <espessura>
+}]
+
+7. Paginação
+Respeite margens
+Respeite conteúdo que se repete por página
+Caso o conteúdo seja dinâmico, estruture o código para permitir paginação automática
+
+Estrutura Esperada do Retorno
+
+Seu retorno DEVE CONTER APENAS:
+- Um breve comentário inicial explicando:
+  * Quantas páginas o PDF possui
+  * Se existe header visual
+  * Se existe footer visual
+- O código completo em pdfMake
+
+❌ Não explique pdfMake
+❌ Não escreva texto fora do código
+❌ Não escreva instruções adicionais
+❌ Não pergunte nada
+
+Missão Final
+Você deve agir como um engenheiro de layout reverso de PDF, não como um explicador.
+📌 Seu único objetivo é recriar o PDF fidelmente em código.`;
+
+        // Converter PDF para base64
+        const base64PDF = await fileToBase64(selectedPDFFile);
+        
+        // Fazer chamada à OpenAI
+        const response = await callOpenAIAPI(base64PDF, agentPrompt);
+        
+        // Processar resposta e converter para o formato do editor
+        await processAIResponse(response);
+        
+        // Fechar modal
+        closeAIReplicateModal();
+        
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Sucesso', 'PDF replicado com sucesso! O layout foi carregado no editor.');
+        }
+      } catch (error) {
+        console.error('Erro ao replicar PDF:', error);
+        if (errorDiv) {
+          errorDiv.textContent = error.message || 'Erro ao processar PDF com IA. Por favor, tente novamente.';
+          errorDiv.style.display = 'block';
+        }
+      } finally {
+        if (loadingDiv) loadingDiv.style.display = 'none';
+        if (replicateBtn) replicateBtn.disabled = false;
+      }
+    }
+    
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    
+    async function callOpenAIAPI(base64PDF, prompt) {
+      // ⚠️ IMPORTANTE: CONFIGURAÇÃO DA API KEY DA OPENAI
+      // 
+      // Para usar esta funcionalidade, você precisa:
+      // 1. Obter uma API key da OpenAI em https://platform.openai.com/api-keys
+      // 2. Substituir 'YOUR_OPENAI_API_KEY' abaixo pela sua chave
+      // 
+      // ⚠️ SEGURANÇA: Em produção, NUNCA exponha sua API key no código frontend!
+      // Recomenda-se criar um backend/proxy que faça a chamada à API.
+      // 
+      // Para desenvolvimento local, você pode usar:
+       const OPENAI_API_KEY = localStorage.getItem('openai_api_key') || 'YOUR_OPENAI_API_KEY';
+      
+      // Tentar obter do localStorage primeiro, senão usar a chave padrão
+      //let OPENAI_API_KEY = localStorage.getItem('openai_api_key') || 'YOUR_OPENAI_API_KEY';
+      
+      if (!OPENAI_API_KEY || OPENAI_API_KEY === 'YOUR_OPENAI_API_KEY') {
+        throw new Error('API key da OpenAI não configurada. Por favor, defina localStorage.setItem("openai_api_key", "sua-chave-aqui") no console do navegador ou configure diretamente no código.');
+      }
+      
+      // Converter PDF para imagens (páginas) usando pdf.js ou similar
+      // Por enquanto, vamos usar uma abordagem alternativa: enviar o PDF como arquivo
+      // Nota: A API da OpenAI requer que PDFs sejam convertidos para imagens primeiro
+      // ou usar a API de Assistants com file uploads
+      
+      // Método 1: Usar Assistants API (recomendado para PDFs)
+      try {
+        // Primeiro, fazer upload do arquivo
+        const formData = new FormData();
+        formData.append('file', selectedPDFFile);
+        formData.append('purpose', 'assistants');
+        
+        const uploadResponse = await fetch('https://api.openai.com/v1/files', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`
+          },
+          body: formData
+        });
+        
+        if (!uploadResponse.ok) {
+          throw new Error('Erro ao fazer upload do arquivo');
+        }
+        
+        const fileData = await uploadResponse.json();
+        const fileId = fileData.id;
+        
+        // Agora criar uma thread e usar o Assistants API
+        // Por simplicidade, vamos usar chat completions com conversão de PDF para texto
+        // Nota: Para produção, considere usar um backend que converta PDF para imagens
+        
+        // Método alternativo: Converter PDF para texto e enviar descrição
+        const pdfText = await extractPDFText(selectedPDFFile);
+        
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENAI_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o', // ou 'gpt-4-turbo'
+            messages: [
+              {
+                role: 'system',
+                content: prompt
+              },
+              {
+                role: 'user',
+                content: `Analise este PDF e gere o código pdfMake correspondente. 
+
+Informações extraídas do PDF:
+${pdfText.substring(0, 5000)}...`
+              }
+            ],
+            max_tokens: 4000,
+            temperature: 0.1
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || 'Erro ao chamar API da OpenAI');
+        }
+        
+        const data = await response.json();
+        return data.choices[0].message.content;
+      } catch (error) {
+        // Se falhar, tentar método alternativo
+        console.warn('Método principal falhou, tentando método alternativo:', error);
+        throw error;
+      }
+    }
+    
+    async function extractPDFText(file) {
+      // Método simples: tentar extrair texto básico do PDF
+      // Para produção, use pdf.js ou similar
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const arrayBuffer = e.target.result;
+          const uint8Array = new Uint8Array(arrayBuffer);
+          const pdfText = new TextDecoder('latin1').decode(uint8Array);
+          
+          // Extrair texto básico (método simples)
+          const textMatches = pdfText.match(/\((.*?)\)/g);
+          let extractedText = '';
+          if (textMatches) {
+            extractedText = textMatches.slice(0, 100).join(' '); // Limitar para não exceder tokens
+          }
+          
+          resolve(extractedText || 'PDF processado. Por favor, analise visualmente.');
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+    
+    async function processAIResponse(aiResponse) {
+      // Extrair código do pdfMake da resposta
+      let code = aiResponse;
+      
+      // Tentar extrair apenas o código entre var dd = ... ou function()...
+      const codeMatch = code.match(/var\s+dd\s*=\s*(\(function\s*\([^)]*\)\s*\{[\s\S]*?\}\s*\)\s*\(\)|[\s\S]*?);/);
+      if (codeMatch) {
+        code = codeMatch[1];
+      }
+      
+      // Executar o código para obter o objeto dd
+      let dd;
+      try {
+        // Criar função segura para executar o código
+        const func = new Function('return ' + code);
+        dd = func();
+      } catch (error) {
+        // Se falhar, tentar executar diretamente
+        try {
+          eval('var dd = ' + code);
+        } catch (e) {
+          throw new Error('Erro ao processar código retornado pela IA: ' + e.message);
+        }
+      }
+      
+      // Converter objeto dd para formato do editor
+      await convertPDFMakeToEditor(dd);
+    }
+    
+    async function convertPDFMakeToEditor(dd) {
+      // Limpar canvas atual
+      elements = [];
+      currentTemplateId = null;
+      
+      // Atualizar configurações de página
+      if (dd.pageSize) {
+        pageSize = dd.pageSize;
+        const pageSizeSel = document.getElementById('pageSize');
+        if (pageSizeSel) pageSizeSel.value = pageSize;
+      }
+      
+      if (dd.pageOrientation) {
+        orientation = dd.pageOrientation;
+        const orientationSel = document.getElementById('orientation');
+        if (orientationSel) orientationSel.value = orientation;
+      }
+      
+      if (dd.pageMargins) {
+        pageMargins = dd.pageMargins;
+        const mL = document.getElementById('mL');
+        const mT = document.getElementById('mT');
+        const mR = document.getElementById('mR');
+        const mB = document.getElementById('mB');
+        if (mL) mL.value = pageMargins[0];
+        if (mT) mT.value = pageMargins[1];
+        if (mR) mR.value = pageMargins[2];
+        if (mB) mB.value = pageMargins[3];
+      }
+      
+      // Converter content para elementos do editor
+      if (dd.content && Array.isArray(dd.content)) {
+        const rootGroup = {
+          id: uid(),
+          type: 'group',
+          properties: {
+            orientation: 'column',
+            gap: 10,
+            children: []
+          }
+        };
+        
+        // Converter cada item do content
+        for (const item of dd.content) {
+          const element = pdfMakeToEditorElement(item);
+          if (element) {
+            rootGroup.properties.children.push(element);
+          }
+        }
+        
+        elements = [rootGroup];
+      }
+      
+      // Renderizar tudo
+      renderAll();
+      renderInspector();
+      // Código será gerado apenas quando usuário solicitar na aba de código
+      updateSaveTemplateButtonVisibility();
+      
+      if (typeof showAlertModal === 'function') {
+        showAlertModal('Sucesso', 'Layout replicado com sucesso!');
+      }
+    }
+    
+    function pdfMakeToEditorElement(item) {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+      
+      // Stack = Group
+      if (item.stack && Array.isArray(item.stack)) {
+        const group = {
+          id: uid(),
+          type: 'group',
+          properties: {
+            orientation: 'column',
+            gap: 10,
+            children: []
+          }
+        };
+        
+        for (const child of item.stack) {
+          const childElement = pdfMakeToEditorElement(child);
+          if (childElement) {
+            group.properties.children.push(childElement);
+          }
+        }
+        
+        return group;
+      }
+      
+      // Columns
+      if (item.columns && Array.isArray(item.columns)) {
+        const columns = {
+          id: uid(),
+          type: 'columns',
+          properties: {
+            columnsCount: item.columns.length,
+            gap: item.columnGap || 10,
+            columns: item.columns.map(col => ({
+              width: col.width || '*',
+              children: []
+            }))
+          }
+        };
+        
+        // Processar conteúdo de cada coluna
+        item.columns.forEach((col, index) => {
+          if (col.stack) {
+            col.stack.forEach(child => {
+              const childElement = pdfMakeToEditorElement(child);
+              if (childElement) {
+                columns.properties.columns[index].children.push(childElement);
+              }
+            });
+          } else {
+            const childElement = pdfMakeToEditorElement(col);
+            if (childElement) {
+              columns.properties.columns[index].children.push(childElement);
+            }
+          }
+        });
+        
+        return columns;
+      }
+      
+      // Table
+      if (item.table && item.table.body) {
+        const table = {
+          id: uid(),
+          type: 'table',
+          properties: {
+            headerRows: item.table.headerRows || 0,
+            widths: item.table.widths || [],
+            body: item.table.body.map(row => 
+              row.map(cell => {
+                if (typeof cell === 'string') {
+                  return { text: cell };
+                }
+                return cell;
+              })
+            )
+          }
+        };
+        
+        return table;
+      }
+      
+      // Text
+      if (item.text !== undefined) {
+        return {
+          id: uid(),
+          type: 'text',
+          properties: {
+            text: item.text,
+            fontSize: item.fontSize || 14,
+            bold: item.bold || false,
+            italics: item.italics || false,
+            alignment: item.alignment || 'left',
+            color: item.color,
+            margin: item.margin || [0, 0, 0, 10]
+          }
+        };
+      }
+      
+      // Image
+      if (item.image) {
+        return {
+          id: uid(),
+          type: 'image',
+          properties: {
+            url: item.image,
+            width: item.width || 200,
+            height: item.height || 150,
+            margin: item.margin || [0, 0, 0, 10]
+          }
+        };
+      }
+      
+      // List
+      if (item.ul || item.ol) {
+        const listType = item.ul ? 'ul' : 'ol';
+        const items = item[listType] || [];
+        
+        return {
+          id: uid(),
+          type: 'list',
+          properties: {
+            listType: listType,
+            items: items.map(it => ({
+              kind: 'text',
+              text: typeof it === 'string' ? it : it.text || ''
+            })),
+            margin: item.margin || [0, 0, 0, 10]
+          }
+        };
+      }
+      
+      return null;
+    }
+    
+    window.handleAIReplicate = handleAIReplicate;
+    */
+
+    // Salvar estado antes de fechar/recarregar a página
+    window.addEventListener('beforeunload', () => {
+      saveState();
+    });
+
+    // Salvar periodicamente (a cada 30 segundos) como backup
+    setInterval(() => {
+      saveState();
+    }, 30000);
