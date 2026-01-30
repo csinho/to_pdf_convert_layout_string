@@ -12533,6 +12533,8 @@
       try {
         // Gerar código via Supabase
         const generatedCode = await generateCodeViaSupabase();
+
+        console.log(generatedCode);
         
         // Atualizar o codeEditor com o código gerado (para manter sincronizado)
         const codeEditor = document.getElementById('codeEditor');
