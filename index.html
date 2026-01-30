@@ -2447,6 +2447,10 @@
     let documentPageInfo = null; // { author: '', title: '', subject: '', keywords: '' }
     let documentCompress = false; // true/false
 
+    // Cache para código gerado pelo Supabase
+    let lastGeneratedCode = null; // Último código gerado com sucesso
+    let lastElementsStateHash = null; // Hash do estado que gerou o último código
+
     // -----------------------
     // Supabase - Configuração e Autenticação
     // -----------------------
@@ -2497,56 +2501,46 @@
     const STORAGE_CODE_KEY = 'pdfmake_editor_code';
 
     // Salvar estado completo no localStorage
+    // Função recursiva para limpar propriedades UI-específicas de qualquer objeto
+    function cleanElementForStorageRecursive(el) {
+      if (el === null || el === undefined) return el;
+      
+      // Se for um array, processar cada elemento
+      if (Array.isArray(el)) {
+        return el.map(item => cleanElementForStorageRecursive(item));
+      }
+      
+      // Se não for um objeto, retornar como está
+      if (typeof el !== 'object') return el;
+      
+      // Criar uma cópia limpa do objeto
+      const cleaned = {};
+      
+      for (const key in el) {
+        if (!el.hasOwnProperty(key)) continue;
+        
+        // Pular propriedades UI-específicas
+        if (key === '_ui' || key === '_base64Preview' || key === '_styleName') {
+          continue;
+        }
+        
+        // Processar recursivamente valores que são objetos ou arrays
+        const value = el[key];
+        if (value !== null && typeof value === 'object') {
+          cleaned[key] = cleanElementForStorageRecursive(value);
+        } else {
+          cleaned[key] = value;
+        }
+      }
+      
+      return cleaned;
+    }
+
     // Função para remover propriedades internas (como _base64Preview) antes de salvar
     function cleanElementsForStorage(elements) {
       if (!elements || !Array.isArray(elements)) return elements;
-
-      return elements.map(el => {
-        const cleaned = { ...el };
-        if (cleaned.properties) {
-          cleaned.properties = { ...cleaned.properties };
-          // Remover _base64Preview (apenas para preview visual)
-          delete cleaned.properties._base64Preview;
-
-          // Limpar recursivamente se houver children
-          if (cleaned.properties.children && Array.isArray(cleaned.properties.children)) {
-            cleaned.properties.children = cleanElementsForStorage(cleaned.properties.children);
-          }
-
-          // Limpar recursivamente se houver columns
-          if (cleaned.properties.columns && Array.isArray(cleaned.properties.columns)) {
-            cleaned.properties.columns = cleaned.properties.columns.map(col => {
-              if (col.children && Array.isArray(col.children)) {
-                return { ...col, children: cleanElementsForStorage(col.children) };
-              }
-              return col;
-            });
-          }
-
-          // Limpar recursivamente se houver items (listas)
-          if (cleaned.properties.items && Array.isArray(cleaned.properties.items)) {
-            cleaned.properties.items = cleaned.properties.items.map(item => {
-              if (item.kind === 'node' && item.node) {
-                return { ...item, node: cleanElementsForStorage([item.node])[0] };
-              }
-              return item;
-            });
-          }
-
-          // Limpar recursivamente se houver body (tabelas)
-          if (cleaned.properties.body && Array.isArray(cleaned.properties.body)) {
-            cleaned.properties.body = cleaned.properties.body.map(row => {
-              return row.map(cell => {
-                if (cell && cell.children && Array.isArray(cell.children)) {
-                  return { ...cell, children: cleanElementsForStorage(cell.children) };
-                }
-                return cell;
-              });
-            });
-          }
-        }
-        return cleaned;
-      });
+      // Usar a função recursiva para limpar todos os elementos
+      return cleanElementForStorageRecursive(elements);
     }
 
     function saveState() {
@@ -2561,12 +2555,12 @@
           pageSize: pageSize,
           pageMargins: pageMargins,
           zoom: zoom,
-          documentHeader: documentHeader,
-          documentFooter: documentFooter,
-          documentWatermark: documentWatermark,
-          documentTOC: documentTOC,
-          documentSecurity: documentSecurity,
-          documentPageInfo: documentPageInfo,
+          documentHeader: documentHeader ? cleanElementForStorageRecursive(documentHeader) : null,
+          documentFooter: documentFooter ? cleanElementForStorageRecursive(documentFooter) : null,
+          documentWatermark: documentWatermark ? cleanElementForStorageRecursive(documentWatermark) : null,
+          documentTOC: documentTOC ? cleanElementForStorageRecursive(documentTOC) : null,
+          documentSecurity: documentSecurity ? cleanElementForStorageRecursive(documentSecurity) : null,
+          documentPageInfo: documentPageInfo ? cleanElementForStorageRecursive(documentPageInfo) : null,
           documentCompress: documentCompress,
           timestamp: Date.now()
         };
@@ -11160,12 +11154,12 @@
         pageSize: pageSize,
         orientation: orientation,
         pageMargins: pageMargins,
-        documentHeader: documentHeader ? JSON.parse(JSON.stringify(documentHeader)) : null,
-        documentFooter: documentFooter ? JSON.parse(JSON.stringify(documentFooter)) : null,
-        documentWatermark: documentWatermark ? JSON.parse(JSON.stringify(documentWatermark)) : null,
-        documentTOC: documentTOC ? JSON.parse(JSON.stringify(documentTOC)) : null,
-        documentSecurity: documentSecurity ? JSON.parse(JSON.stringify(documentSecurity)) : null,
-        documentPageInfo: documentPageInfo ? JSON.parse(JSON.stringify(documentPageInfo)) : null,
+        documentHeader: documentHeader ? cleanElementForStorageRecursive(documentHeader) : null,
+        documentFooter: documentFooter ? cleanElementForStorageRecursive(documentFooter) : null,
+        documentWatermark: documentWatermark ? cleanElementForStorageRecursive(documentWatermark) : null,
+        documentTOC: documentTOC ? cleanElementForStorageRecursive(documentTOC) : null,
+        documentSecurity: documentSecurity ? cleanElementForStorageRecursive(documentSecurity) : null,
+        documentPageInfo: documentPageInfo ? cleanElementForStorageRecursive(documentPageInfo) : null,
         documentCompress: documentCompress
       };
     }
@@ -11189,9 +11183,24 @@
       return dd;
     }
 
+    // Função para gerar hash do estado atual do editor
+    function generateCurrentEditorStateHash() {
+      const config = getElementConfigurations();
+      return JSON.stringify(config);
+    }
+
     // Função para gerar código via Edge Function e retornar o código (sem atualizar codeEditor)
     async function generateCodeViaSupabase() {
       try {
+        // Gerar hash do estado atual do editor
+        const currentHash = generateCurrentEditorStateHash();
+        
+        // Verificar se o estado não mudou e temos código em cache
+        if (lastGeneratedCode !== null && lastElementsStateHash === currentHash) {
+          console.log('Reutilizando código do Supabase em cache');
+          return lastGeneratedCode;
+        }
+        
         // Construir objeto dd (sem funções, apenas dados)
         const dd = buildDocDefinitionForSerialization();
         
@@ -11208,12 +11217,19 @@
 
         if (!response.ok) {
           const errorText = await response.text();
+          // Limpar cache em caso de erro
+          lastGeneratedCode = null;
+          lastElementsStateHash = null;
           throw new Error(`Erro ${response.status}: ${errorText || response.statusText}`);
         }
 
         const result = await response.json();
 
         if (result && result.code) {
+          // Atualizar cache com o novo código e hash
+          lastGeneratedCode = result.code;
+          lastElementsStateHash = currentHash;
+          
           // Salvar código gerado no localStorage
           try {
             localStorage.setItem(STORAGE_CODE_KEY, result.code);
@@ -11223,10 +11239,16 @@
           
           return result.code;
         } else {
+          // Limpar cache em caso de resposta inválida
+          lastGeneratedCode = null;
+          lastElementsStateHash = null;
           throw new Error('Resposta inválida da Edge Function: código não encontrado');
         }
       } catch (error) {
         console.error('Erro ao gerar código:', error);
+        // Limpar cache em caso de erro
+        lastGeneratedCode = null;
+        lastElementsStateHash = null;
         throw error;
       }
     }
