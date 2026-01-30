@@ -12570,14 +12570,14 @@
             console.log('Enviando código para Bubble (tamanho:', cod.length, 'caracteres):', cod.substring(0, 100) + '...');
             
             try {
-              bubbleIframe.contentWindow.postMessage({ type: "set_cod", cod }, origin);
+              bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
               console.log('Mensagem enviada com sucesso para Bubble');
             } catch (error) {
               console.error('Erro ao enviar mensagem para Bubble:', error);
               // Tentar novamente após mais um delay
               setTimeout(() => {
                 try {
-                  bubbleIframe.contentWindow.postMessage({ type: "set_cod", cod }, origin);
+                  bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
                   console.log('Tentativa de reenvio bem-sucedida');
                 } catch (retryError) {
                   console.error('Erro na tentativa de reenvio:', retryError);
