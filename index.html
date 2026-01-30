@@ -12534,8 +12534,6 @@
         // Gerar código via Supabase
         const generatedCode = await generateCodeViaSupabase();
 
-        console.log('Código gerado pelo Supabase:', generatedCode.substring(0, 200) + '...');
-        
         // Atualizar o codeEditor global com o código gerado (para manter sincronizado)
         if (codeEditor) {
           codeEditor.textContent = generatedCode;
@@ -12566,20 +12564,15 @@
               showAlertModal('Erro', 'O código gerado está vazio. Por favor, tente novamente.');
               return;
             }
-
-            console.log('Enviando código para Bubble (tamanho:', cod.length, 'caracteres):', cod.substring(0, 100) + '...');
-            
             try {
               bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
-              console.log('Mensagem enviada com sucesso para Bubble');
-            } catch (error) {
+               } catch (error) {
               console.error('Erro ao enviar mensagem para Bubble:', error);
               // Tentar novamente após mais um delay
               setTimeout(() => {
                 try {
                   bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
-                  console.log('Tentativa de reenvio bem-sucedida');
-                } catch (retryError) {
+                  } catch (retryError) {
                   console.error('Erro na tentativa de reenvio:', retryError);
                 }
               }, 1000);
