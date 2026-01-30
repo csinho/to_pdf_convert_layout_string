@@ -12553,11 +12553,10 @@
         bubbleIframe.src = BUBBLE_URL;
 
         bubbleIframe.onload = () => {
-
-          const cod = getCodToSend() || generatedCode;
+          const cod = getCodToSend();
           const origin = new URL(bubbleIframe.src).origin;
-
-          bubbleIframe.contentWindow.postMessage({ type: "SET_COD", cod }, origin);
+          const value = cod|| generatedCode
+          bubbleIframe.contentWindow.postMessage({ type: "SET_COD", value }, origin);
         };
       } catch (error) {
         // Esconder modal de loading em caso de erro
