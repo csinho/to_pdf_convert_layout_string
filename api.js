@@ -73,6 +73,37 @@
               detectSessionInUrl: true
             }
           });
+          
+          // Configurar listener para mudanças de autenticação
+          supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT' || !session) {
+              // Salvar ID do usuário antes de limpar variáveis
+              const userId = currentUser?.id;
+              
+              // Limpar variáveis globais ao fazer logout
+              currentUser = null;
+              currentProfile = null;
+              currentInstallation = null;
+              currentTemplateId = null;
+              
+              // Limpar localStorage relacionado ao usuário
+              if (userId) {
+                const storageKey = `user_profile_${userId}`;
+                localStorage.removeItem(storageKey);
+              }
+              
+              // Mostrar modal de login
+              showLoginModal();
+            } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+              // Atualizar usuário quando logar ou token for renovado
+              if (session && session.user) {
+                currentUser = session.user;
+                loadUserProfile();
+                hideLoginModal();
+              }
+            }
+          });
+          
           checkAuth();
         } catch (error) {
           console.error('Erro ao inicializar Supabase:', error);
@@ -10227,6 +10258,17 @@
     const TEMPLATE_STORAGE_KEY = 'pdf_editor_templates';
 
     function saveTemplate() {
+      // Verificar se usuário está autenticado antes de abrir o modal
+      if (!currentUser || !currentProfile) {
+        if (typeof showAlertModal === 'function') {
+          showAlertModal('Erro', 'Você precisa estar logado para salvar templates.');
+        } else {
+          alert('Você precisa estar logado para salvar templates.');
+        }
+        showLoginModal();
+        return;
+      }
+
       // Se há um template carregado, atualizar diretamente sem mostrar modal
       if (currentTemplateId) {
         // Buscar nome do template atual para usar na atualização
@@ -10241,7 +10283,7 @@
 
       if (modal && input) {
         input.value = '';
-        errorDiv.style.display = 'none';
+        if (errorDiv) errorDiv.style.display = 'none';
         modal.classList.add('active');
         input.focus();
 
@@ -10261,9 +10303,19 @@
       let templateName;
 
       // Verificar se usuário está autenticado
-      if (!currentUser || !currentProfile || !currentInstallation) {
+      if (!currentUser || !currentProfile) {
         if (errorDiv) {
           errorDiv.textContent = 'Você precisa estar logado para salvar templates.';
+          errorDiv.style.display = 'block';
+        }
+        showLoginModal();
+        return;
+      }
+
+      // Verificar se há installation
+      if (!currentInstallation) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Nenhuma instalação encontrada. Você precisa ter uma instalação ativa para salvar templates.';
           errorDiv.style.display = 'block';
         }
         return;
@@ -10402,11 +10454,25 @@
 
       if (!modal || !listDiv) return;
 
-      // Verificar se usuário está autenticado
-      if (!currentUser || !currentProfile || !currentInstallation) {
+      // Verificar se usuário está autenticado (mas permitir abrir modal mesmo sem installation)
+      if (!currentUser || !currentProfile) {
         if (typeof showAlertModal === 'function') {
           showAlertModal('Erro', 'Você precisa estar logado para carregar templates.');
+        } else {
+          alert('Você precisa estar logado para carregar templates.');
         }
+        showLoginModal();
+        return;
+      }
+
+      // Se não há installation, mostrar mensagem no modal
+      if (!currentInstallation) {
+        if (emptyDiv) {
+          emptyDiv.textContent = 'Nenhuma instalação encontrada. Você precisa ter uma instalação ativa para carregar templates.';
+          emptyDiv.style.display = 'block';
+        }
+        if (listDiv) listDiv.style.display = 'none';
+        modal.classList.add('active');
         return;
       }
 
@@ -10721,6 +10787,16 @@
     }
     if (loadTemplateBtn) {
       loadTemplateBtn.addEventListener('click', loadTemplate);
+    }
+
+    // Event listener para fechar modal de login ao clicar fora
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) {
+      loginModal.addEventListener('click', (e) => {
+        if (e.target.id === 'loginModal') {
+          hideLoginModal();
+        }
+      });
     }
 
     // copy in code tab
