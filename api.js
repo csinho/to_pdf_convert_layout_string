@@ -66,7 +66,13 @@
       // O Supabase JS v2 expõe createClient no objeto window.supabase
       if (typeof window.supabase !== 'undefined' && typeof window.supabase.createClient === 'function') {
         try {
-          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: {
+              persistSession: true,
+              autoRefreshToken: true,
+              detectSessionInUrl: true
+            }
+          });
           checkAuth();
         } catch (error) {
           console.error('Erro ao inicializar Supabase:', error);
@@ -10784,6 +10790,51 @@
       if (!currentUser) return;
 
       try {
+        // Tentar carregar do localStorage primeiro
+        const storageKey = `user_profile_${currentUser.id}`;
+        const storedData = localStorage.getItem(storageKey);
+        
+        if (storedData) {
+          try {
+            const parsed = JSON.parse(storedData);
+            // Verificar se os dados ainda são válidos (menos de 5 minutos)
+            if (parsed.timestamp && (Date.now() - parsed.timestamp) < 5 * 60 * 1000) {
+              currentProfile = parsed.profile;
+              currentInstallation = parsed.installation;
+              
+              // Se temos profile mas não installation, buscar installation do Supabase
+              if (currentProfile && !currentInstallation) {
+                const { data: anyInstallation, error: anyInstError } = await supabaseClient
+                  .from('installation')
+                  .select('*')
+                  .eq('id_profile', currentProfile.id)
+                  .eq('status', 'active')
+                  .limit(1)
+                  .single();
+
+                  console.log('aqui 1');
+                if (!anyInstError && anyInstallation) {
+                  currentInstallation = anyInstallation;
+                  // Atualizar localStorage
+                  localStorage.setItem(storageKey, JSON.stringify({
+                    profile: currentProfile,
+                    installation: currentInstallation,
+                    timestamp: Date.now()
+                  }));
+                }
+              }
+              
+              // Se temos dados válidos do localStorage, usar
+              if (currentProfile) {
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('Erro ao parsear dados do localStorage:', e);
+          }
+        }
+
+        // Se não encontrou no localStorage ou dados inválidos, buscar do Supabase
         // Buscar ou criar profile
         let { data: profile, error } = await supabaseClient
           .from('profile')
@@ -10816,42 +10867,36 @@
           currentProfile = profile;
         }
 
-        // Buscar ou criar installation (usando app_id padrão por enquanto)
-        // Você pode ajustar isso conforme necessário
-        const appId = 'default_app';
-        let { data: installation, error: instError } = await supabaseClient
+        // Buscar installation existente (NÃO criar)
+        // Buscar QUALQUER installation ativa do profile
+        const { data: anyInstallation, error: anyInstError } = await supabaseClient
           .from('installation')
           .select('*')
           .eq('id_profile', currentProfile.id)
-          .eq('app_id', appId)
           .eq('status', 'active')
+          .limit(1)
           .single();
 
-        if (instError && instError.code === 'PGRST116') {
-          // Installation não existe, criar uma nova
-          const { data: newInstallation, error: createInstError } = await supabaseClient
-            .from('installation')
-            .insert({
-              id_profile: currentProfile.id,
-              app_id: appId,
-              access_token: 'default_token', // Você pode ajustar isso
-              status: 'active'
-            })
-            .select()
-            .single();
+          console.log('aqui 2');
 
-          if (createInstError) {
-            console.error('Erro ao criar installation:', createInstError);
-            return;
-          }
-
-          currentInstallation = newInstallation;
-        } else if (instError) {
-          console.error('Erro ao carregar installation:', instError);
-          return;
+        if (anyInstError && anyInstError.code === 'PGRST116') {
+          // Nenhuma installation existe - não criar, apenas definir como null
+          console.warn('Nenhuma installation ativa encontrada para o profile:', currentProfile.id);
+          currentInstallation = null;
+        } else if (anyInstError) {
+          console.error('Erro ao carregar installation:', anyInstError);
+          currentInstallation = null;
         } else {
-          currentInstallation = installation;
+          // Usar a installation existente encontrada
+          currentInstallation = anyInstallation;
         }
+
+        // Salvar no localStorage após carregar do Supabase
+        localStorage.setItem(storageKey, JSON.stringify({
+          profile: currentProfile,
+          installation: currentInstallation,
+          timestamp: Date.now()
+        }));
       } catch (error) {
         console.error('Erro ao carregar dados do usuário:', error);
       }
@@ -10920,7 +10965,7 @@
       } catch (error) {
         console.error('Erro ao fazer login:', error);
         if (errorDiv) {
-          errorDiv.textContent = error.message || 'Erro ao fazer login. Verifique suas credenciais.';
+          errorDiv.textContent = 'Erro ao fazer login. Verifique suas credenciais.';
           errorDiv.style.display = 'block';
         }
       }
